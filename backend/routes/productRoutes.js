@@ -6,6 +6,14 @@ import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { upload } from "../middleware/upload.js";
 
 function attachProductImages(req, _res, next) {
+  for (const key of ["shippingWeightGrams", "shippingLengthCm", "shippingWidthCm", "shippingHeightCm"]) {
+    if (req.body[key] === "") req.body[key] = null;
+    else if (req.body[key] != null) {
+      const number = Number(req.body[key]);
+      if (!Number.isSafeInteger(number) || number < 1 || number > (key === "shippingWeightGrams" ? 500000 : 500)) return next(Object.assign(new Error("Enter positive whole shipping measurements (grams and cm)."), { status: 400 }));
+      req.body[key] = number;
+    }
+  }
   const main = req.files?.mainImage?.[0];
   const gallery = req.files?.galleryImages || [];
   if (main) req.body.mainImage = `/uploads/${main.filename}`;

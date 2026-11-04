@@ -80,7 +80,8 @@ async function upsertBySlug(model, values) {
 async function main() {
   syncModels();
   await sequelize.authenticate();
-  await sequelize.sync({ alter: true });
+  const { syncDatabaseSchema } = await import("../config/schema.js");
+  await syncDatabaseSchema(sequelize);
 
   const passwordHash = await bcrypt.hash("Admin@123", 10);
   {

@@ -28,6 +28,9 @@ export const Order = sequelize.define(
     trackingNumber: { type: DataTypes.STRING(150), allowNull: true, field: "tracking_number" },
     trackingUrl: { type: DataTypes.STRING(1000), allowNull: true, field: "tracking_url" },
     stockReleased: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false, field: "stock_released" },
+    shippingProvider: { type: DataTypes.STRING(30), allowNull: true, field: "shipping_provider" },
+    shipmentState: { type: DataTypes.STRING(30), allowNull: true, field: "shipment_state" },
+    shippingDetails: { type: DataTypes.JSON, allowNull: true, field: "shipping_details" },
   },
   { tableName: "orders" },
 );

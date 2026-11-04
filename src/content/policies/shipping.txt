@@ -1,6 +1,6 @@
  SHIPPING POLICY
 
-Last Updated: September 7, 2026
+Last Updated: November 4, 2026
 
 Welcome to Lgscosmetics.
 
@@ -46,6 +46,8 @@ The actual delivery time may vary depending on:
 The delivery date shown at checkout or communicated to the customer is an estimated timeframe and not an absolute guarantee.
 
  4. Shipping Charges
+
+Standard delivery costs Rs40 for orders with a product subtotal below Rs900. Orders with a product subtotal of Rs900 or more qualify for free standard delivery. This threshold is calculated before coupon discounts. Store pickup has no delivery charge. Delivery remains subject to PIN code serviceability.
 
 Shipping charges, if applicable, will be communicated or displayed to the customer before the order is confirmed.
 

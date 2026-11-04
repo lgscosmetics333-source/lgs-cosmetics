@@ -7,6 +7,8 @@ export type CustomerOrder = {
   createdAt: string; updatedAt: string; shippingAddress: string; deliveryMode: string;
   subtotal: number | string; discount: number | string; shippingCharge: number | string; totalAmount: number | string;
   paymentMethod: string; paymentStatus: string; orderStatus: string; courierName?: string; trackingNumber?: string; trackingUrl?: string;
+  shippingProvider?: string; shipmentState?: string;
+  shippingDetails?: { parcel?: { weight: number; length: number; width: number; height: number }; lastStatus?: string; location?: string; description?: string; estimatedDelivery?: number; estimatedDays?: { min?: number; max?: number }; checkedAt?: string; estimate?: number };
   items: { id: number; productName: string; productImage?: string; variantLabel?: string; price: number | string; quantity: number; total: number | string }[];
   events: { id: number; orderStatus: string; paymentStatus: string; note: string; createdAt: string }[];
   emails?: { id: number; eventId: number; status: string; attempts: number; sentAt?: string; lastError?: string }[];

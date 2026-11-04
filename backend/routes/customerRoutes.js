@@ -3,6 +3,8 @@ import { Router } from "express";
 import { requireCustomer } from "../middleware/customerAuth.js";
 import { Order, OrderItem, OrderEvent } from "../models/index.js";
 import { createCustomerOrder, orderError } from "../services/orderService.js";
+import { ekartEnabled } from "../services/ekartClient.js";
+import { quoteCustomerShipping } from "../services/shippingQuoteService.js";
 
 export const customerRoutes = Router();
 customerRoutes.use(requireCustomer);
@@ -27,7 +29,11 @@ customerRoutes.get("/orders/:number", async (req, res, next) => {
   } catch (error) { next(error); }
 });
 customerRoutes.get("/checkout-options", (_req, res) => {
-  res.json({ success: true, data: { onlinePaymentAvailable: onlinePaymentAvailable() } });
+  res.json({ success: true, data: { onlinePaymentAvailable: onlinePaymentAvailable(), ekartEnabled: ekartEnabled() } });
+});
+customerRoutes.post("/shipping-quote", async (req, res, next) => {
+  try { res.json({ success: true, data: await quoteCustomerShipping(req.customer, req.body) }); }
+  catch (error) { next(error); }
 });
 
 customerRoutes.post("/orders/:number/payment", async (req, res, next) => { try { res.json({ data: await initiatePayment(req.customer.id, req.params.number) }); } catch (error) { next(error); } });

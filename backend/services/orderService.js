@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { Op } from "sequelize";
 import { sequelize } from "../config/database.js";
 import { Product, Coupon, Order, OrderItem, OrderEvent, OrderEmail } from "../models/index.js";
+import { ekartEnabled, parcelForItems } from "./ekartClient.js";
+import { fixedDelivery, quoteFingerprint, verifyShippingQuote } from "./shippingQuoteService.js";
 
 export const orderStatuses = ["Pending", "Confirmed", "Processing", "Shipped", "Out for delivery", "Ready for pickup", "Delivered", "Cancelled"];
 export const paymentStatuses = ["Awaiting payment", "Verification pending", "Awaiting collection", "Pay at store", "Paid", "Failed", "Refunded"];
@@ -74,11 +76,19 @@ export async function createCustomerOrder(customer, body) {
       discount = Math.min(subtotal, Math.max(0, discount));
       await coupon.increment("usedCount", { transaction });
     }
-    const shipping = body.deliveryMode === "Pickup" || subtotal >= 99900 ? 0 : 7900;
+    let shipping = body.deliveryMode === "Pickup" ? 0 : money(fixedDelivery(subtotal / 100));
+    let deliveryQuote = null;
+    if (body.deliveryMode === "Delivery" && ekartEnabled()) {
+      const parcel = parcelForItems(items, products);
+      deliveryQuote = verifyShippingQuote(body.shippingQuoteToken, quoteFingerprint({ customerId: customer.id, pincode: address.pincode,
+        paymentMethod: body.paymentMethod, items, subtotal: subtotal / 100, discount: discount / 100, couponCode: coupon?.code, parcel }));
+      shipping = money(deliveryQuote.shippingCharge);
+    }
     const order = await Order.create({ customerId: customer.id, checkoutKey: key, orderNumber: `LGS-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 6).toUpperCase()}`,
       customerName: name, email: customer.email, phone, shippingAddress: body.deliveryMode === "Pickup" ? "Store pickup" : JSON.stringify(address), deliveryMode: body.deliveryMode,
       subtotal: subtotal / 100, discount: discount / 100, shippingCharge: shipping / 100, totalAmount: (subtotal - discount + shipping) / 100,
       couponCode: coupon?.code || null, paymentMethod: body.paymentMethod, paymentStatus: body.paymentMethod === "upi" ? "Awaiting payment" : body.paymentMethod === "store" ? "Pay at store" : "Awaiting collection", orderStatus: "Pending",
+      ...(deliveryQuote ? { shippingDetails: { parcel: deliveryQuote.parcel, estimate: deliveryQuote.estimate, estimatedDays: deliveryQuote.estimatedDays, quotedCharge: deliveryQuote.shippingCharge } } : {}),
     }, { transaction });
     await OrderItem.bulkCreate(snapshots.map((item) => ({ ...item, orderId: order.id })), { transaction });
     for (const product of products) await product.decrement("stock", { by: quantities.get(product.id), transaction });
@@ -94,7 +104,9 @@ export async function updateOrder(id, body) {
   return sequelize.transaction(async (transaction) => {
     const order = await Order.findByPk(id, { transaction, lock: transaction.LOCK.UPDATE });
     if (!order) throw orderError("Order not found.", 404);
+    if (["Booking", "Needs review", "Cancelling", "Cancellation review"].includes(order.shipmentState)) throw orderError("Resolve the pending Ekart operation before changing this order.", 409);
     const status = body.orderStatus || order.orderStatus;
+    if (status === "Cancelled" && order.shippingProvider === "Ekart" && order.shipmentState !== "Cancelled") throw orderError("Cancel the Ekart shipment before cancelling this order.", 409);
     const requestedPayment = body.paymentStatus || order.paymentStatus;
     const payment = requestedPayment === "Pending" && order.paymentStatus === "Pending" ? (order.paymentMethod === "upi" ? "Awaiting payment" : order.paymentMethod === "store" ? "Pay at store" : "Awaiting collection") : requestedPayment;
     if (!orderStatuses.includes(status) || !paymentStatuses.includes(payment)) throw orderError("Choose a valid order and payment status.");
@@ -114,6 +126,7 @@ export async function updateOrder(id, body) {
       const value = body[field] === undefined ? (order[field] || "") : body[field];
       if (typeof value !== "string" || value.length > max) throw orderError("Invalid courier details.");
       details[field] = value.trim() || null;
+      if (order.shippingProvider === "Ekart" && details[field] !== (order[field] || null)) throw orderError("Ekart tracking details are managed by the shipping integration.", 409);
     }
     if (details.trackingUrl) { try { if (!/^https?:$/.test(new URL(details.trackingUrl).protocol)) throw Error(); } catch { throw orderError("Enter a valid courier tracking link."); } }
     if (["Shipped", "Out for delivery"].includes(status) && (!details.courierName || !details.trackingNumber)) throw orderError("Enter the courier name and tracking/AWB number before shipping.");

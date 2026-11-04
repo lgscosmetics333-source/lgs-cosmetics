@@ -24,6 +24,7 @@ import { toNodeHandler } from "better-auth/node";
 import { getMigrations } from "better-auth/db/migration";
 import { customerAuth, customerPool } from "./config/customer-auth.js";
 import { customerRoutes } from "./routes/customerRoutes.js";
+import { shippingRoutes, startEkartTrackingWorker } from "./routes/shippingRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -66,6 +67,7 @@ app.use("/api/site-settings", siteSettingRoutes);
 app.use("/api/admin-users", adminUserRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/customer", customerRoutes);
+app.use("/api/shipping", shippingRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
@@ -80,6 +82,7 @@ async function bootstrap() {
     await customerPool.query(statement.replace(/\btimestamp\(3\)/gi, "datetime(3)"));
   }
   startOrderEmailWorker();
+  startEkartTrackingWorker();
   app.listen(port, () => {
     console.log(`LGS backend listening on http://localhost:${port}`);
   });

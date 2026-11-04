@@ -12,7 +12,7 @@ type AvailableCoupon = { code: string; discountType: string; discountValue: stri
 export function CustomerCheckout() {
   const { lines, subtotal, clearCart, setQty, removeFromCart } = useShop();
   const session = useCustomer();
-  const options = useQuery({ queryKey: ["checkout-options"], queryFn: () => customerRequest<{ data: { onlinePaymentAvailable: boolean } }>("/api/customer/checkout-options"), enabled: Boolean(session.data?.user) });
+  const options = useQuery({ queryKey: ["checkout-options"], queryFn: () => customerRequest<{ data: { onlinePaymentAvailable: boolean; ekartEnabled: boolean } }>("/api/customer/checkout-options"), enabled: Boolean(session.data?.user) });
   const coupons = useQuery({ queryKey: ["available-coupons"], queryFn: () => customerRequest<{ data: AvailableCoupon[] }>("/api/coupons/available"), staleTime: 0, refetchInterval: 60_000 });
   const [appliedCode, setAppliedCode] = useState("");
   const [pickup, setPickup] = useState(false);
@@ -23,9 +23,24 @@ export function CustomerCheckout() {
   const [checkingCoupon, setCheckingCoupon] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [pincode, setPincode] = useState("");
   const key = useRef<string | null>(null);
-  const delivery = pickup || subtotal >= 999 ? 0 : 79;
   const user = session.data?.user;
+  const shippingItems = lines.map(({ line, product }) => ({ productId: Number(product.id.replace(/^admin-/, "")), quantity: line.qty, variant: line.variant || null }));
+  const ekart = options.data?.data.ekartEnabled === true;
+  const shipping = useQuery({
+    queryKey: ["shipping-quote", user?.id, pincode, payment, shippingItems, discount > 0 ? appliedCode : "", subtotal],
+    queryFn: () => customerRequest<{ data: { shippingCharge: number; subtotal: number; discount: number; estimate: number; quoteToken: string; estimatedDays: { min?: number; max?: number } | null } }>("/api/customer/shipping-quote", {
+      pincode, paymentMethod: payment, items: shippingItems, couponCode: discount > 0 ? appliedCode : "",
+    }),
+    enabled: Boolean(user) && ekart && !pickup && /^[1-9]\d{5}$/.test(pincode),
+    staleTime: 60_000, refetchInterval: 5 * 60_000, retry: false,
+  });
+  const delivery = pickup ? 0 : ekart ? shipping.data?.data.shippingCharge ?? 0 : subtotal >= 900 ? 0 : 40;
+  const needsQuote = ekart && !pickup;
+  const deliveryReady = !needsQuote || (/^[1-9]\d{5}$/.test(pincode) && Boolean(shipping.data) && !shipping.isError && !shipping.isFetching);
+  const confirmedSubtotal = needsQuote && shipping.data ? shipping.data.data.subtotal : subtotal;
+  const confirmedDiscount = needsQuote && shipping.data ? shipping.data.data.discount : discount;
 
   async function applyCoupon(code = coupon) {
     setCoupon(code); setAppliedCode("");
@@ -40,7 +55,7 @@ export function CustomerCheckout() {
     finally { setCheckingCoupon(false); }
   }
   async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (busy) return; setBusy(true); setError("");
+    event.preventDefault(); if (busy || !deliveryReady || options.isPending || options.isError) return; setBusy(true); setError("");
     const form = new FormData(event.currentTarget);
     key.current ??= crypto.randomUUID();
     try {
@@ -48,6 +63,7 @@ export function CustomerCheckout() {
         checkoutKey: key.current, name: form.get("name"), phone: form.get("phone"),
         address: Object.fromEntries(["street", "city", "district", "state", "pincode"].map((field) => [field, form.get(field) || ""])),
         paymentMethod: payment, deliveryMode: pickup ? "Pickup" : "Delivery", couponCode: discount > 0 ? appliedCode : "",
+        shippingQuoteToken: needsQuote ? shipping.data?.data.quoteToken : undefined,
         items: lines.map(({ line, product }) => ({ productId: Number(product.id.replace(/^admin-/, "")), quantity: line.qty, variant: line.variant })),
       });
       clearCart();
@@ -63,7 +79,7 @@ export function CustomerCheckout() {
     <section className="container-lv grid items-start gap-7 py-10 lg:grid-cols-[minmax(0,1fr)_380px]">
       <form id="checkout-form" onSubmit={submit} className="min-w-0 space-y-6">
         <div className="bg-white p-5 sm:p-7"><h2 className="text-2xl text-wine">1. Contact information</h2><div className="mt-5 grid gap-4 sm:grid-cols-2"><label className="grid gap-2 text-sm">Full name<input name="name" defaultValue={user.name} autoComplete="name" required maxLength={120} className="h-12 border px-3" /></label><label className="grid gap-2 text-sm">Phone number<input name="phone" type="tel" autoComplete="tel" required pattern="[+0-9 ()-]{10,20}" maxLength={20} className="h-12 border px-3" /></label><label className="grid gap-2 text-sm sm:col-span-2">Account email<input value={user.email} readOnly className="h-12 border bg-stone-50 px-3" /></label></div></div>
-        <div className="bg-white p-5 sm:p-7"><h2 className="text-2xl text-wine">2. Delivery address</h2><label className="mt-5 flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" checked={pickup} onChange={(e) => { setPickup(e.target.checked); if (!e.target.checked && payment === "store") setPayment("cod"); }} className="size-4 accent-wine" />Pick up from our Koregaon store</label>{!pickup && <div className="mt-5 grid gap-4 sm:grid-cols-2">{[{ name: "street", title: "House, building & street", auto: "street-address" }, { name: "city", title: "City / Town", auto: "address-level2" }, { name: "pincode", title: "PIN code", auto: "postal-code" }, { name: "district", title: "District", auto: "off" }, { name: "state", title: "State", auto: "address-level1" }].map((field) => <label key={field.name} className={`grid gap-2 text-sm ${field.name === "street" ? "sm:col-span-2" : ""}`}>{field.title}<input name={field.name} autoComplete={field.auto} defaultValue={field.name === "state" ? "Maharashtra" : ""} required maxLength={field.name === "pincode" ? 6 : 250} {...(field.name === "pincode" ? { pattern: "[1-9][0-9]{5}", inputMode: "numeric" as const } : {})} className="h-12 border px-3" /></label>)}</div>}</div>
+        <div className="bg-white p-5 sm:p-7"><h2 className="text-2xl text-wine">2. Delivery address</h2><label className="mt-5 flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" checked={pickup} onChange={(e) => { setPickup(e.target.checked); if (!e.target.checked && payment === "store") setPayment("cod"); }} className="size-4 accent-wine" />Pick up from our Koregaon store</label>{!pickup && <div className="mt-5 grid gap-4 sm:grid-cols-2">{[{ name: "street", title: "House, building & street", auto: "street-address" }, { name: "city", title: "City / Town", auto: "address-level2" }, { name: "pincode", title: "PIN code", auto: "postal-code" }, { name: "district", title: "District", auto: "off" }, { name: "state", title: "State", auto: "address-level1" }].map((field) => <label key={field.name} className={`grid gap-2 text-sm ${field.name === "street" ? "sm:col-span-2" : ""}`}>{field.title}<input name={field.name} autoComplete={field.auto} {...(field.name !== "pincode" ? { defaultValue: field.name === "state" ? "Maharashtra" : "" } : {})} {...(field.name === "pincode" ? { value: pincode, onChange: (event: React.ChangeEvent<HTMLInputElement>) => setPincode(event.target.value.replace(/\D/g, "")) } : {})} required maxLength={field.name === "pincode" ? 6 : 250} {...(field.name === "pincode" ? { pattern: "[1-9][0-9]{5}", inputMode: "numeric" as const } : {})} className="h-12 border px-3" /></label>)}</div>}</div>
         <div className="bg-white p-5 sm:p-7"><h2 className="text-2xl text-wine">3. Payment method</h2><div className="mt-5 space-y-3">{[{ value: "cod", title: "Cash on Delivery", text: "Pay the order total when your parcel arrives." }, ...(options.data?.data.onlinePaymentAvailable ? [{ value: "upi", title: "UPI / Online payment", text: "Pay securely through Razorpay. Payment is confirmed by the server." }] : []), ...(pickup ? [{ value: "store", title: "Pay at store", text: "Pay when you collect your order." }] : [])].map((item) => <label key={item.value} className={`flex min-h-20 items-center gap-4 border p-4 ${payment === item.value ? "border-wine bg-secondary" : ""}`}><input type="radio" name="paymentMethod" value={item.value} checked={payment === item.value} onChange={() => setPayment(item.value)} className="size-4 accent-wine" /><span><b className="block text-sm">{item.title}</b><span className="mt-1 block text-xs leading-6 text-muted-foreground">{item.text}</span></span></label>)}{!options.data?.data.onlinePaymentAvailable && <div className="border bg-stone-50 p-4 text-sm text-muted-foreground"><b>UPI / Online payment</b><p className="mt-1 text-xs leading-6">Temporarily unavailable. Please choose cash on delivery or store pickup.</p></div>}</div></div>
       </form>
       <aside className="min-w-0 space-y-5 bg-white p-5 sm:p-7 lg:sticky lg:top-32"><h2 className="text-3xl text-wine">Order Summary</h2><div className="space-y-4">{lines.map(({ line, product }) => <div key={`${product.id}-${line.variant || ""}`} className="flex gap-3 border-b pb-4"><img src={product.image} alt={product.name} className="size-16 shrink-0 object-contain" /><div className="min-w-0 flex-1"><p className="text-sm font-semibold">{product.name}</p><p className="mt-1 text-xs text-muted-foreground">{line.variant}</p><div className="mt-2 flex flex-wrap items-center justify-between gap-2"><label className="text-xs">Qty <input aria-label={`Quantity for ${product.name}`} type="number" min={1} max={product.stock || 99} value={line.qty} disabled={busy || checkingCoupon} onChange={(e) => { setQty(product.id, Math.max(1, Number(e.target.value)), line.shade, line.variant); setDiscount(0); }} className="ml-1 h-9 w-14 border px-2" /></label><b className="text-xs">{formatINR((product.variants?.find((v) => v.label === line.variant)?.price ?? product.price) * line.qty)}</b></div><button disabled={busy} onClick={() => { removeFromCart(product.id, line.shade, line.variant); setDiscount(0); }} className="mt-1 min-h-9 text-xs underline">Remove</button></div></div>)}</div>
@@ -75,7 +91,8 @@ export function CustomerCheckout() {
             return <article key={offer.code} className={`min-w-0 rounded-lg border border-dashed p-3 ${applied ? "border-wine bg-secondary" : "border-wine/30"}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="break-all text-sm font-bold tracking-wide text-wine">{offer.code}</p><p className="mt-1 text-sm font-semibold">{offer.discountType === "fixed" ? formatINR(Number(offer.discountValue)) : `${Number(offer.discountValue)}%`} off</p></div><button type="button" disabled={!eligible || checkingCoupon || busy || applied} onClick={() => void applyCoupon(offer.code)} className="min-h-10 shrink-0 border border-wine px-3 text-xs font-semibold text-wine disabled:opacity-50">{applied ? "Applied" : "Apply"}</button></div><p className="mt-2 text-xs leading-6 text-muted-foreground">{minimum > 0 ? `Minimum order ${formatINR(minimum)}` : "No minimum order"}{offer.maxDiscount != null ? ` ? Maximum discount ${formatINR(Number(offer.maxDiscount))}` : ""}{offer.expiresAt ? ` ? Expires ${new Date(offer.expiresAt).toLocaleDateString("en-IN")}` : ""}</p>{!eligible && <p className="mt-1 text-xs text-wine">Add {formatINR(minimum - subtotal)} more to use this coupon.</p>}</article>;
           })}</div>}
         </section>
-        <dl className="space-y-3 text-sm">{[["Subtotal", subtotal], ["Delivery", delivery], ["Discount", -discount], ["Total", Math.max(subtotal - discount + delivery, 0)]].map(([label, value]) => <div key={String(label)} className="flex justify-between gap-4"><dt>{label}</dt><dd className="font-semibold">{formatINR(Number(value))}</dd></div>)}</dl>{error && <p role="alert" className="text-sm text-red-700">{error}</p>}<button form="checkout-form" type="submit" disabled={busy} className="min-h-12 w-full bg-wine px-5 text-sm font-semibold text-white disabled:opacity-50">{busy ? "Placing order…" : "Place order"}</button><p className="text-xs leading-6 text-muted-foreground">The final price, coupon and stock are verified before your order is placed.</p>
+        <div className="space-y-2 text-sm" aria-live="polite">{options.isError && <p role="alert">Unable to load checkout settings. <button type="button" onClick={() => void options.refetch()} className="underline">Retry</button></p>}{needsQuote && (!/^[1-9]\d{5}$/.test(pincode) ? <p>Enter your PIN code to check delivery and shipping charges.</p> : shipping.isFetching ? <p>Checking delivery availability...</p> : shipping.isError ? <p role="alert">{shipping.error.message} <button type="button" onClick={() => void shipping.refetch()} className="min-h-11 underline">Retry</button></p> : shipping.data ? <p className="text-emerald-800">Ekart delivery available.{shipping.data.data.estimatedDays?.min != null && shipping.data.data.estimatedDays?.max != null ? ` Estimated transit: ${shipping.data.data.estimatedDays.min}–${shipping.data.data.estimatedDays.max} days after dispatch.` : ""}</p> : null)}</div>
+        <dl className="space-y-3 text-sm">{[["Subtotal", confirmedSubtotal], ["Delivery", delivery], ["Discount", -confirmedDiscount], ["Total", Math.max(confirmedSubtotal - confirmedDiscount + delivery, 0)]].map(([label, value]) => <div key={String(label)} className="flex justify-between gap-4"><dt>{label}</dt><dd className="font-semibold">{needsQuote && !deliveryReady && (label === "Delivery" || label === "Total") ? "Awaiting delivery check" : formatINR(Number(value))}</dd></div>)}</dl>{error && <p role="alert" className="text-sm text-red-700">{error}</p>}<button form="checkout-form" type="submit" disabled={busy || !deliveryReady || options.isPending || options.isError} className="min-h-12 w-full bg-wine px-5 text-sm font-semibold text-white disabled:opacity-50">{busy ? "Placing order…" : "Place order"}</button><p className="text-xs leading-6 text-muted-foreground">The final price, coupon and stock are verified before your order is placed.</p>
       </aside>
     </section>
   </>;

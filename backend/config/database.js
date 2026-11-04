@@ -2,6 +2,7 @@ import { Sequelize } from "sequelize";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import { syncDatabaseSchema } from "./schema.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,7 +27,7 @@ export async function initializeDatabase() {
 
   try {
     await sequelize.authenticate();
-    await sequelize.sync({ alter: true });
+    await syncDatabaseSchema(sequelize);
     console.log("Database connection established.");
   } catch (error) {
     console.warn("Database connection failed. Backend will still start, but API calls will error until MySQL is available.");
