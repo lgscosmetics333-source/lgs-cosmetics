@@ -30,7 +30,6 @@ type ProductFormState = {
   salePrice: string;
   stock: string;
   shippingWeightGrams: string;
-  shippingLengthCm: string;
   shippingWidthCm: string;
   shippingHeightCm: string;
   status: "Active" | "Inactive";
@@ -64,7 +63,6 @@ const initialState: ProductFormState = {
   salePrice: "",
   stock: "",
   shippingWeightGrams: "",
-  shippingLengthCm: "",
   shippingWidthCm: "",
   shippingHeightCm: "",
   status: "Active",
@@ -164,7 +162,6 @@ function Page() {
           salePrice: product.salePrice?.toString?.() ?? "",
           stock: product.stock?.toString?.() ?? "",
           shippingWeightGrams: product.shippingWeightGrams?.toString?.() ?? "",
-          shippingLengthCm: product.shippingLengthCm?.toString?.() ?? "",
           shippingWidthCm: product.shippingWidthCm?.toString?.() ?? "",
           shippingHeightCm: product.shippingHeightCm?.toString?.() ?? "",
           status: product.status === "Inactive" ? "Inactive" : "Active",
@@ -237,7 +234,7 @@ function Page() {
       body.append("price", basePrice);
       body.append("salePrice", form.salePrice.trim() || firstVariant?.price.trim() || basePrice);
       body.append("stock", form.stock.trim() || "0");
-      for (const field of ["shippingWeightGrams", "shippingLengthCm", "shippingWidthCm", "shippingHeightCm"] as const) body.append(field, form[field].trim());
+      for (const field of ["shippingWeightGrams", "shippingWidthCm", "shippingHeightCm"] as const) body.append(field, form[field].trim());
       body.append("status", form.status);
       body.append("featured", String(form.featured));
       body.append("tags", JSON.stringify(parseList(form.tags)));
@@ -402,7 +399,7 @@ function Page() {
               <h3 className="text-sm font-semibold">Delivery measurements</h3>
               <p className="text-xs leading-6 text-stone-500">Measure one unit with its protective packaging. For variants, use the largest unit. Checkout stacks units for an estimate; confirm the final packed parcel before booking.</p>
               <div className="grid gap-4 sm:grid-cols-2">{([
-                ["shippingWeightGrams", "Packed unit weight (grams)"], ["shippingLengthCm", "Length (cm)"],
+                ["shippingWeightGrams", "Packed unit weight (grams)"],
                 ["shippingWidthCm", "Width (cm)"], ["shippingHeightCm", "Height (cm)"],
               ] as const).map(([field, label]) => <TextField key={field} label={label} type="number" value={form[field]} onChange={value => setForm(current => ({ ...current, [field]: value }))} placeholder="Measured whole number" />)}</div>
             </div>
