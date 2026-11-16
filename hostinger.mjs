@@ -20,28 +20,40 @@ export async function startCombinedServer({
   const frontendEntry = path.join(outputDirectory, "server/index.mjs");
   if (!existsSync(frontendEntry))
     throw new Error("Frontend build is missing. Run npm run build:hostinger first.");
-  const [{ middleware }, { createBackendApp, initializeBackend }] = await Promise.all([
-    import(pathToFileURL(frontendEntry).href),
-    import("./backend/app.js"),
-  ]);
-  if (typeof middleware !== "function")
-    throw new Error("Expected a Node middleware build. Run npm run build:hostinger.");
-
   let ready = false;
   let stopped = false;
   let retryTimer;
   let pendingInitialization;
-  const app = createBackendApp({
-    isReady: () => ready,
-    frontend: middleware,
-    publicDirectory: path.join(outputDirectory, "public"),
+  let app;
+  const server = createServer((req, res) => {
+    if (app) return app(req, res);
+    res.writeHead(503, { "Content-Type": "text/plain", "Retry-After": "5" });
+    res.end("Application is starting. Please retry shortly.");
   });
-  const server = createServer(app);
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, hostname, resolve);
   });
   const address = server.address();
+  console.log(`LGS frontend + API listening on port ${address.port}`);
+  let initializeBackend;
+  try {
+    const [frontendModule, backendModule] = await Promise.all([
+      import(pathToFileURL(frontendEntry).href),
+      import("./backend/app.js"),
+    ]);
+    if (typeof frontendModule.middleware !== "function")
+      throw new Error("Expected a Node middleware build. Run npm run build:hostinger.");
+    initializeBackend = backendModule.initializeBackend;
+    app = backendModule.createBackendApp({
+      isReady: () => ready,
+      frontend: frontendModule.middleware,
+      publicDirectory: path.join(outputDirectory, "public"),
+    });
+  } catch (error) {
+    await new Promise((resolve) => server.close(resolve));
+    throw error;
+  }
   // SSR calls the API through this process, never through public DNS or a
   // second backend server. The browser still requests relative /api URLs.
   process.env.LGS_INTERNAL_API_ORIGIN = `http://127.0.0.1:${address.port}`;
@@ -65,7 +77,6 @@ export async function startCombinedServer({
       }
     })());
   const initialization = connect();
-  console.log(`LGS frontend + API listening on port ${address.port}`);
 
   return {
     server,

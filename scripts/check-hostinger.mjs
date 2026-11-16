@@ -53,7 +53,7 @@ assert.ok(
 const nitro = JSON.parse(await readFile(new URL("../.output/nitro.json", import.meta.url), "utf8"));
 assert.equal(nitro.preset, "node-middleware");
 
-const { startCombinedServer } = await import(releaseModule("app.mjs"));
+const { startCombinedServer } = await import(releaseModule("hostinger.mjs"));
 const { Product, ProductCategory, SiteSetting, syncModels } = await import(
   releaseModule("backend/models/index.js")
 );

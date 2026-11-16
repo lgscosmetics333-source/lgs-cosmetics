@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { access, cp, copyFile } from "node:fs/promises";
+import { access, cp, copyFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -38,5 +38,23 @@ for (const entry of [
       !path.basename(source).startsWith(".env") && path.basename(source) !== ".npmrc",
   });
 }
-await copyFile(path.join(root, "hostinger.mjs"), path.join(output, "app.mjs"));
+await copyFile(path.join(root, "hostinger.mjs"), path.join(output, "hostinger.mjs"));
+await writeFile(path.join(output, "app.mjs"), `import { startCombinedServer } from "./hostinger.mjs";
+startCombinedServer().then((running) => {
+  let stopping = false;
+  const shutdown = async () => {
+    if (stopping) return;
+    stopping = true;
+    const timeout = setTimeout(() => process.exit(1), 15000);
+    timeout.unref();
+    await running.close();
+    clearTimeout(timeout);
+  };
+  process.once("SIGTERM", shutdown);
+  process.once("SIGINT", shutdown);
+}).catch((error) => {
+  console.error("Failed to start the combined LGS app:", error);
+  process.exitCode = 1;
+});
+`);
 console.log("Hostinger single-app build ready: output .output, entry app.mjs");
