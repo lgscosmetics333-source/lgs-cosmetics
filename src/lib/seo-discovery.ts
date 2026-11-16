@@ -39,11 +39,23 @@ export async function seoDiscoveryResponse(request: Request): Promise<Response |
 
   if (pathname === "/sitemap.xml") {
     try {
-      const signal = AbortSignal.timeout(5000);
-      const [products, categories] = await Promise.all([
-        readCatalog<CatalogProduct>("products", signal),
-        readCatalog<CatalogCategory>("product-categories", signal),
-      ]);
+      const load = (base?: string) => {
+        const signal = AbortSignal.timeout(5000);
+        return Promise.all([
+          readCatalog<CatalogProduct>("products", signal, base),
+          readCatalog<CatalogCategory>("product-categories", signal, base),
+        ]);
+      };
+      let catalog;
+      try {
+        catalog = await load();
+      } catch (error) {
+        // Some hosts do not permit the server to reach its own listener over
+        // loopback. Retry public API endpoints without publishing partial data.
+        console.warn("Sitemap internal catalog request failed; retrying public API.", error);
+        catalog = await load(SITE_ORIGIN);
+      }
+      const [products, categories] = catalog;
       const paths = new Set([
         ...Object.keys(publicPageSeo),
         ...products

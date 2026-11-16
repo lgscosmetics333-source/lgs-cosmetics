@@ -41,8 +41,9 @@ export type CatalogCategory = {
 export async function readCatalog<T>(
   resource: "products" | "product-categories",
   signal: AbortSignal,
+  baseOverride?: string,
 ): Promise<T[]> {
-  const base = getApiBase();
+  const base = baseOverride ?? getApiBase();
   const items: T[] = [];
   for (let page = 1; ; page++) {
     const response = await fetch(`${base}/api/${resource}?limit=100&page=${page}`, { signal });
