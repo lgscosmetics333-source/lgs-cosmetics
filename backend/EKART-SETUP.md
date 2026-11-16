@@ -31,7 +31,7 @@ Additional settings:
 - `EKART_SERVICE=SURFACE` (default) or `EXPRESS`.
 - `EKART_PACKAGING_WEIGHT_GRAMS` and `EKART_BOX_PADDING_CM` account for additional outer packaging, beyond the measurements of individual protected units. Both default to zero; enter measured values if required.
 - `EKART_WEBHOOK_SECRET`: random 30-character hex value.
-- `EKART_PUBLIC_BACKEND_URL=https://peru-pigeon-257481.hostingersite.com`.
+- `EKART_PUBLIC_BACKEND_URL=https://lgscosmetics.com` (the storefront and webhook API share this origin).
 
 Local setup/check commands (run from repository root):
 
