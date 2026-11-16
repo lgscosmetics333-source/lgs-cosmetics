@@ -91,6 +91,8 @@ const product = {
   tags: ["bestseller"],
 };
 Product.findAndCountAll = async () => ({ count: 1, rows: [product] });
+Product.findAll = async () => [{ slug: product.slug }];
+ProductCategory.findAll = async () => [{ slug: "skin-care" }];
 ProductCategory.findAndCountAll = async () => ({
   count: 1,
   rows: [{ slug: "skin-care", name: "Skin Care", status: "Active" }],

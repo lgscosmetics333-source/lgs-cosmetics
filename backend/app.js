@@ -24,6 +24,7 @@ import { getMigrations } from "better-auth/db/migration";
 import { customerAuth, customerPool } from "./config/customer-auth.js";
 import { customerRoutes } from "./routes/customerRoutes.js";
 import { shippingRoutes, startEkartTrackingWorker } from "./routes/shippingRoutes.js";
+import { Product, ProductCategory } from "./models/index.js";
 
 export function createBackendApp({ frontend, publicDirectory, isReady = () => true } = {}) {
   const app = express();
@@ -43,6 +44,24 @@ export function createBackendApp({ frontend, publicDirectory, isReady = () => tr
       credentials: true,
     }),
   );
+  // The combined deployment reads the catalog directly, avoiding network
+  // calls back to the host's own public or loopback address.
+  if (frontend) app.get("/sitemap.xml", async (_req, res) => {
+    if (!isReady()) return res.status(503).set("Retry-After", "300").set("Cache-Control", "no-store").send("Sitemap temporarily unavailable. Please retry shortly.");
+    try {
+      const [products, categories] = await Promise.all([
+        Product.findAll({ attributes: ["slug"], where: { status: "Active" }, raw: true }),
+        ProductCategory.findAll({ attributes: ["slug"], where: { status: "Active" }, raw: true }),
+      ]);
+      const pages = ["/", "/shop", "/new-arrivals", "/best-sellers", "/lgs-products", "/offers", "/about", "/contact", "/blog", "/gallery", "/faqs", "/shipping-information", "/return-policy", "/privacy-policy", "/terms-and-conditions"];
+      const paths = new Set([...pages, ...products.filter(p => p.slug).map(p => `/product/${encodeURIComponent(p.slug)}`), ...categories.filter(c => c.slug).map(c => `/shop/${encodeURIComponent(c.slug)}`)]);
+      const urls = [...paths].map(path => `  <url><loc>https://lgscosmetics.com${path.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</loc></url>`).join("\n");
+      return res.set("Cache-Control", "public, max-age=3600").type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`);
+    } catch (error) {
+      console.error("Unable to generate sitemap from database", error);
+      return res.status(503).set("Retry-After", "300").set("Cache-Control", "no-store").send("Sitemap temporarily unavailable. Please retry shortly.");
+    }
+  });
   app.get("/api/health", (_req, res) => {
     const ready = isReady();
     res
