@@ -50,11 +50,13 @@ For production images, set **`UPLOAD_DIR`** to an absolute, writable directory o
 
 Existing database records and uploaded images are not in GitHub. Reuse the existing MySQL database credentials or migrate its data securely; the build does not seed or replace your products. Startup runs the existing application/auth schema initialization. Do not run the development seed script on a live customer database.
 
-## Optional fresh-database import
+## Optional database import files
 
-The app creates and updates its tables automatically after it connects to MySQL, so importing SQL is optional. For a new, empty Hostinger database, you can instead import `backend/database/hostinger-import.sql` through phpMyAdmin after selecting that database. It contains the core table structure and the 5 public product categories plus 14 catalog products from the repository. Better Auth creates its customer-auth tables at first successful startup.
+The app creates and updates its tables automatically after it connects to MySQL. For a new, empty Hostinger database, `backend/database/hostinger-import.sql` provides the core table structure. After importing it, import `backend/database/seed.sql` to add the 5 public product categories and 14 catalog products.
 
-This starter file does not contain customer records, orders, reviews, uploaded files, or an admin account. Import it only once into an empty database. For an existing store database, migrate its own export rather than importing this starter file. To regenerate it after catalog or image changes, run `npm run build:hostinger` and then `node backend/scripts/export-hostinger-database.mjs`.
+If you want to reuse an existing database, keep its data and point the app's `DB_*` environment variables at it. Let the app start and apply schema updates first; then import `seed.sql` only if you want missing catalog entries added. Its `INSERT IGNORE` statements leave existing product/category slugs unchanged. Do not import the structure file into an existing production database.
+
+The seed file does not contain customer records, orders, reviews, uploaded files, or an admin account. Better Auth creates its customer-auth tables at first successful startup. To regenerate both files after catalog or image changes, run `npm run build:hostinger` and then `node backend/scripts/export-hostinger-database.mjs`.
 
 ## Start and verify
 

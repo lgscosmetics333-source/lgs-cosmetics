@@ -10,6 +10,7 @@ const projectRoot = path.resolve(scriptDirectory, "../..");
 const builtAssetsDirectory = path.join(projectRoot, ".output", "public", "assets");
 const outputDirectory = path.join(projectRoot, "backend", "database");
 const outputFile = path.join(outputDirectory, "hostinger-import.sql");
+const seedFile = path.join(outputDirectory, "seed.sql");
 
 if (!fs.existsSync(builtAssetsDirectory)) {
   throw new Error("Build the Hostinger app first with `npm run build:hostinger`.");
@@ -38,12 +39,11 @@ function sqlJson(value) {
 
 syncModels();
 const queryGenerator = sequelize.getQueryInterface().queryGenerator;
-const statements = [
-  "-- LGS Cosmetics starter schema and public catalog for Hostinger MySQL/MariaDB.",
-  "-- Import once into a newly created, empty database selected in phpMyAdmin.",
-  "-- Contains schema plus public product/category data only; no customers, orders, reviews, admin accounts, or credentials.",
+const schemaStatements = [
+  "-- LGS Cosmetics core schema for Hostinger MySQL/MariaDB.",
+  "-- Import into a newly created, empty database selected in phpMyAdmin.",
+  "-- Contains table structure only; no customer/order/review/admin data or credentials.",
   "-- Better Auth customer tables are created by the app during its first successful startup.",
-  "-- Upload files separately if your catalog references /uploads; this starter catalog uses built /assets URLs.",
   "SET NAMES utf8mb4;",
   "SET FOREIGN_KEY_CHECKS=0;",
 ];
@@ -54,7 +54,7 @@ for (const model of Object.values(sequelize.models)) {
     table: tableName,
     context: "createTable",
   });
-  statements.push(
+  schemaStatements.push(
     queryGenerator.createTableQuery(tableName, attributes, {
       ...model.options,
       engine: "InnoDB",
@@ -65,11 +65,17 @@ for (const model of Object.values(sequelize.models)) {
 }
 
 const { categories, products } = loadFrontendCatalog();
-statements.push("-- Initial public store catalog from src/data/catalog.ts.");
+const seedStatements = [
+  "-- LGS Cosmetics public catalog seed for MySQL/MariaDB.",
+  "-- Requires the application tables to exist. Safe to run against an existing catalog: INSERT IGNORE keeps existing slugs unchanged.",
+  "-- Adds 5 public categories and 14 public products only; no admin, customer, order, or review rows.",
+  "-- Product/category image URLs target the bundled /assets files from the matching Hostinger build.",
+  "SET NAMES utf8mb4;",
+];
 
 for (const category of categories) {
-  statements.push(
-    `INSERT INTO \`product_categories\` (\`name\`, \`slug\`, \`description\`, \`image\`, \`group\`, \`types\`, \`status\`, \`displayOrder\`, \`createdAt\`, \`updatedAt\`) VALUES (` +
+  seedStatements.push(
+    `INSERT IGNORE INTO \`product_categories\` (\`name\`, \`slug\`, \`description\`, \`image\`, \`group\`, \`types\`, \`status\`, \`displayOrder\`, \`createdAt\`, \`updatedAt\`) VALUES (` +
       [
         sqlString(category.name),
         sqlString(category.slug),
@@ -128,8 +134,8 @@ for (const product of products) {
     sqlString(product.subtitle),
   ];
 
-  statements.push(
-    `INSERT INTO \`products\` (${columns.map((column) => `\`${column}\``).join(", ")}) ` +
+  seedStatements.push(
+    `INSERT IGNORE INTO \`products\` (${columns.map((column) => `\`${column}\``).join(", ")}) ` +
       `SELECT ${values.join(", ")}, \`id\`, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP ` +
       `FROM \`product_categories\` WHERE \`slug\` = ${sqlString(category.slug)};`,
   );
@@ -137,15 +143,17 @@ for (const product of products) {
 
 for (const product of products) {
   const imageUrl = productImageUrls.get(product.slug);
-  statements.push(
+  seedStatements.push(
     `INSERT INTO \`product_images\` (\`product_id\`, \`url\`, \`alt\`, \`is_primary\`, \`createdAt\`, \`updatedAt\`) ` +
       `SELECT p.\`id\`, ${sqlString(imageUrl)}, ${sqlString(product.name)}, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP ` +
-      `FROM \`products\` p WHERE p.\`slug\` = ${sqlString(product.slug)};`,
+      `FROM \`products\` p WHERE p.\`slug\` = ${sqlString(product.slug)} ` +
+      `AND NOT EXISTS (SELECT 1 FROM \`product_images\` i WHERE i.\`product_id\` = p.\`id\` AND i.\`url\` = ${sqlString(imageUrl)});`,
   );
 }
 
-statements.push("SET FOREIGN_KEY_CHECKS=1;");
+schemaStatements.push("SET FOREIGN_KEY_CHECKS=1;");
 fs.mkdirSync(outputDirectory, { recursive: true });
-fs.writeFileSync(outputFile, `${statements.join("\n\n")}\n`, "utf8");
-console.log(`Created ${path.relative(projectRoot, outputFile)} with ${categories.length} categories and ${products.length} products.`);
+fs.writeFileSync(outputFile, `${schemaStatements.join("\n\n")}\n`, "utf8");
+fs.writeFileSync(seedFile, `${seedStatements.join("\n\n")}\n`, "utf8");
+console.log(`Created ${path.relative(projectRoot, outputFile)} and ${path.relative(projectRoot, seedFile)}. Seed rows: ${categories.length} categories, ${products.length} products.`);
 await sequelize.close();
