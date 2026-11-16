@@ -28,9 +28,9 @@ export function parcelForItems(items, products) {
   for (const item of items) {
     const product = products.find(p => p.id === item.productId);
     if (!product) throw shippingError("A product is no longer available.");
-    if (![product.shippingWeightGrams, product.shippingLengthCm, product.shippingWidthCm, product.shippingHeightCm].every(v => Number(v) > 0)) throw shippingError(`Delivery measurements for ${product.name} are not available. Please contact the store.`, 409);
+    if (![product.shippingWeightGrams, product.shippingWidthCm, product.shippingHeightCm].every(v => Number(v) > 0)) throw shippingError(`Delivery measurements for ${product.name} are not available. Please contact the store.`, 409);
     weight += Number(product.shippingWeightGrams) * item.quantity;
-    length = Math.max(length, Number(product.shippingLengthCm));
+    length = Math.max(length, Number(product.shippingWidthCm));
     width = Math.max(width, Number(product.shippingWidthCm));
     height += Number(product.shippingHeightCm) * item.quantity;
   }

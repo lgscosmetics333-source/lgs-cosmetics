@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { ADMIN_API_BASE } from "./admin-api";
+import { SITE_ORIGIN } from "./seo";
 
 export const seoDefaults = {
-  title: "LGS Cosmetics | Cosmetics Shop in Koregaon",
-  description: "Shop beauty, cosmetics, LGS skincare, and personal care at LGS Cosmetics, Koregaon, Satara.",
-  keywords: "LGS Cosmetics, skin care, hair care, Koregaon",
+  title: "LGS Cosmetics | Skin & Hair Care in Koregaon, Satara",
+  description: "Explore LGS skincare, hair care and personal care products in Koregaon, Satara. Shop online or visit LGS Cosmetics on Koregaon-Rahimatpur Road.",
+  keywords: "LGS Cosmetics, Lucky Varieties Beauty Mall, cosmetics shop in Koregaon, beauty products Koregaon, skincare products Satara, hair care products, personal care, salon supplies Koregaon, imitation jewellery",
   socialTitle: "LGS Cosmetics",
   socialDescription: "Premium beauty products for everyday glow in Koregaon, Satara.",
 };
@@ -27,7 +28,8 @@ export const editablePages = [
 export type PageContent = { title: string; intro: string; body: string };
 
 export async function readSiteSetting<T>(key: string, signal?: AbortSignal): Promise<T | null> {
-  const response = await fetch(`${ADMIN_API_BASE}/api/site-settings/${key}`, signal ? { signal } : {});
+  const base = ADMIN_API_BASE || (typeof window === "undefined" ? SITE_ORIGIN : "");
+  const response = await fetch(`${base}/api/site-settings/${key}`, signal ? { signal } : {});
   if (!response.ok) throw new Error("Unable to load website settings.");
   const payload = await response.json();
   return payload.data ?? null;

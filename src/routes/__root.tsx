@@ -9,8 +9,23 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 
-import { GeneralSettingsProvider, type GeneralSettings } from "@/lib/general-settings";
+import {
+  GeneralSettingsProvider,
+  buildSiteSettings,
+  type GeneralSettings,
+} from "@/lib/general-settings";
 import { readSiteSetting, seoDefaults } from "@/lib/site-settings";
+import { ShopProvider } from "@/lib/shop-store";
+import { readCatalog, type CatalogProduct, type CatalogCategory } from "@/lib/catalog-api";
+import { resolveImageUrl } from "@/lib/admin-api";
+import {
+  SITE_ORIGIN,
+  SOCIAL_IMAGE,
+  publicPageSeo,
+  isPrivatePath,
+  breadcrumbSchema,
+  jsonLd,
+} from "@/lib/seo";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -76,45 +91,160 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  loader: async () => {
+  loader: async ({ location }) => {
     try {
-      const [seo, settings] = await Promise.all([
+      const [seo, settings, products, categories] = await Promise.all([
         readSiteSetting<typeof seoDefaults>("seo", AbortSignal.timeout(2000)).catch(() => null),
         readSiteSetting<GeneralSettings>("general", AbortSignal.timeout(2000)).catch(() => null),
+        isPrivatePath(location.pathname)
+          ? Promise.resolve(null)
+          : readCatalog<CatalogProduct>("products", AbortSignal.timeout(4000))
+              .then((items) => items.filter((item) => item.status === "Active"))
+              .catch(() => null),
+        isPrivatePath(location.pathname)
+          ? Promise.resolve(null)
+          : readCatalog<CatalogCategory>("product-categories", AbortSignal.timeout(4000))
+              .then((items) => items.filter((item) => item.status === "Active"))
+              .catch(() => null),
       ]);
-      return { seo: { ...seoDefaults, ...seo }, settings };
-    } catch { return { seo: seoDefaults, settings: null }; }
+      return { seo: { ...seoDefaults, ...seo }, settings, products, categories };
+    } catch {
+      return { seo: seoDefaults, settings: null, products: null, categories: null };
+    }
   },
-  head: ({ loaderData }) => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: loaderData?.seo.title ?? seoDefaults.title },
-      {
-        name: "description",
-        content:
-          loaderData?.seo.description ?? seoDefaults.description,
+  head: ({ loaderData, matches }) => {
+    const pathname = matches[matches.length - 1]?.pathname.replace(/\/+$/, "") || "/";
+    const pageUrl = new URL(pathname, SITE_ORIGIN).href;
+    const socialImage = SOCIAL_IMAGE;
+    const page = publicPageSeo[pathname];
+    const product = pathname.startsWith("/product/")
+      ? loaderData?.products?.find((item) => `/product/${item.slug}` === pathname)
+      : undefined;
+    const category = loaderData?.categories?.find((item) => `/shop/${item.slug}` === pathname);
+    const title = product
+      ? product.metaTitle || `${product.name} | LGS Cosmetics`
+      : pathname === "/"
+        ? loaderData?.seo.title || seoDefaults.title
+        : page?.title ||
+          (category ? `${category.name} Products | LGS Cosmetics` : "Page | LGS Cosmetics");
+    const description = product
+      ? product.metaDescription ||
+        product.shortDescription ||
+        product.subtitle ||
+        `Explore ${product.name} at LGS Cosmetics in Koregaon, Satara.`
+      : pathname === "/"
+        ? loaderData?.seo.description || seoDefaults.description
+        : page?.description ||
+          (category
+            ? category.description ||
+              `Explore ${category.name} products at LGS Cosmetics. Browse our beauty collection online or visit our store in Koregaon, Satara.`
+            : seoDefaults.description);
+    const noindex = isPrivatePath(pathname) || (!page && !category && !product);
+    const socialTitle = pathname === "/" ? loaderData?.seo.socialTitle || title : title;
+    const socialDescription =
+      pathname === "/" ? loaderData?.seo.socialDescription || description : description;
+    const productImage = product?.mainImage
+      ? new URL(resolveImageUrl(product.mainImage), SITE_ORIGIN).href
+      : socialImage;
+    const { site } = buildSiteSettings(loaderData?.settings);
+    const [locality, region = ""] = site.address.line2.split(",");
+    const postalCode = region.match(/\b\d{6}\b/)?.[0];
+    const business = {
+      "@context": "https://schema.org",
+      "@type": "Store",
+      "@id": `${SITE_ORIGIN}/#store`,
+      name: site.name,
+      url: SITE_ORIGIN,
+      image: socialImage,
+      logo: socialImage,
+      telephone: site.phones[0],
+      address: {
+        "@type": "PostalAddress",
+        streetAddress: site.address.line1,
+        addressLocality: locality?.trim(),
+        addressCountry: "IN",
+        ...(region.trim() ? { addressRegion: region.replace(/\b\d{6}\b/, "").trim() } : {}),
+        ...(postalCode ? { postalCode } : {}),
       },
-      { name: "author", content: "LGS Cosmetics" },
-      { name: "keywords", content: loaderData?.seo.keywords ?? seoDefaults.keywords },
-      { property: "og:title", content: loaderData?.seo.socialTitle || loaderData?.seo.title || seoDefaults.socialTitle },
-      {
-        property: "og:description",
-        content: loaderData?.seo.socialDescription || loaderData?.seo.description || seoDefaults.socialDescription,
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: loaderData?.seo.socialTitle || loaderData?.seo.title || seoDefaults.socialTitle },
-      { name: "twitter:description", content: loaderData?.seo.socialDescription || loaderData?.seo.description || seoDefaults.socialDescription },
-    ],
-    links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
-      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
-    ],
-  }),
+      sameAs: [site.instagram, site.facebook].filter((value) => /^https?:\/\//.test(value)),
+      ...(site.mapsLink ? { hasMap: site.mapsLink } : {}),
+    };
+    const structuredData: unknown[] = noindex ? [] : [breadcrumbSchema(pathname, title)];
+    if (pathname === "/" || pathname === "/contact" || pathname === "/about")
+      structuredData.push(business);
+    if (pathname === "/")
+      structuredData.push({
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "@id": `${SITE_ORIGIN}/#website`,
+        url: SITE_ORIGIN,
+        name: site.name,
+        publisher: { "@id": `${SITE_ORIGIN}/#store` },
+      });
+    if (product)
+      structuredData.push({
+        "@context": "https://schema.org",
+        "@type": "Product",
+        name: product.name,
+        description,
+        image: productImage,
+        ...(product.brand ? { brand: { "@type": "Brand", name: product.brand } } : {}),
+        offers: {
+          "@type": "Offer",
+          url: pageUrl,
+          priceCurrency: "INR",
+          price: Number(product.salePrice ?? product.price),
+          availability: `https://schema.org/${Number(product.stock) > 0 ? "InStock" : "OutOfStock"}`,
+          seller: { "@id": `${SITE_ORIGIN}/#store` },
+        },
+      });
+    return {
+      meta: [
+        { charSet: "utf-8" },
+        { name: "viewport", content: "width=device-width, initial-scale=1" },
+        { title },
+        {
+          name: "description",
+          content: description,
+        },
+        { name: "author", content: "LGS Cosmetics" },
+        { name: "keywords", content: loaderData?.seo.keywords ?? seoDefaults.keywords },
+        {
+          name: "robots",
+          content: noindex ? "noindex, nofollow" : "index, follow, max-image-preview:large",
+        },
+        { property: "og:title", content: socialTitle },
+        {
+          property: "og:description",
+          content: socialDescription,
+        },
+        { property: "og:type", content: "website" },
+        { property: "og:site_name", content: "LGS Cosmetics" },
+        { property: "og:locale", content: "en_IN" },
+        { property: "og:url", content: pageUrl },
+        { property: "og:image", content: productImage },
+        { property: "og:image:secure_url", content: productImage },
+        { property: "og:image:alt", content: product?.name || "LGS Cosmetics logo" },
+        { name: "twitter:card", content: "summary_large_image" },
+        { name: "twitter:image", content: productImage },
+        { name: "twitter:image:alt", content: product?.name || "LGS Cosmetics logo" },
+        { name: "twitter:title", content: socialTitle },
+        { name: "twitter:description", content: socialDescription },
+      ],
+      links: [
+        {
+          rel: "stylesheet",
+          href: appCss,
+        },
+        { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+        ...(!noindex ? [{ rel: "canonical", href: pageUrl }] : []),
+      ],
+      scripts: structuredData.map((data) => ({
+        type: "application/ld+json",
+        children: jsonLd(data),
+      })),
+    };
+  },
   shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
@@ -125,6 +255,18 @@ function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+window.dataLayer.push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
+var gtmScript = document.createElement('script');
+gtmScript.async = true;
+gtmScript.src = 'https://www.googletagmanager.com/gtm.js?id=GTM-PPVH6DSD';
+document.head.appendChild(gtmScript);`,
+          }}
+        />
         <HeadContent />
       </head>
       <body>
@@ -137,12 +279,16 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  const { settings } = Route.useLoaderData();
+  const { settings, products } = Route.useLoaderData();
 
   return (
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <GeneralSettingsProvider initialSettings={settings}><Outlet /></GeneralSettingsProvider>
+      <GeneralSettingsProvider initialSettings={settings}>
+        <ShopProvider initialProducts={products}>
+          <Outlet />
+        </ShopProvider>
+      </GeneralSettingsProvider>
     </QueryClientProvider>
   );
 }

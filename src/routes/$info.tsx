@@ -10,10 +10,14 @@ const validPages = new Set<InfoPageKey>([
   "privacy-policy",
   "terms-and-conditions",
 ]);
-export const Route = createFileRoute("/$info")({ component: Page });
+export const Route = createFileRoute("/$info")({
+  loader: ({ params }) => {
+    if (!validPages.has(params.info as InfoPageKey)) throw notFound();
+  },
+  component: Page,
+});
 function Page() {
   const { info } = Route.useParams();
-  if (!validPages.has(info as InfoPageKey)) throw notFound();
   return (
     <AppShell>
       <InfoPage page={info as InfoPageKey} />

@@ -65,8 +65,8 @@ test("Quotes bind customer, contents, PIN and price; reject tampering and expira
   try { Date.now = () => savedNow() + 11 * 60_000; assert.throws(() => verifyShippingQuote(token, fingerprint), /expired/); } finally { Date.now = savedNow; }
 });
 test("Parcel calculation requires measurements and scales all quantities", () => {
-  const product = { id: 1, name: "Fixture", shippingWeightGrams: 200, shippingLengthCm: 10, shippingWidthCm: 8, shippingHeightCm: 4 };
-  assert.deepEqual(parcelForItems([{ productId: 1, quantity: 3 }], [product]), { weight: 600, length: 10, width: 8, height: 12 });
+  const product = { id: 1, name: "Fixture", shippingWeightGrams: 200, shippingWidthCm: 8, shippingHeightCm: 4 };
+  assert.deepEqual(parcelForItems([{ productId: 1, quantity: 3 }], [product]), { weight: 600, length: 8, width: 8, height: 12 });
   assert.throws(() => parcelForItems([{ productId: 1, quantity: 1 }], [{ ...product, shippingWeightGrams: null }]), /measurements/);
   assert.throws(() => validateParcel({ ...parcel, weight: -1 }), /measured/);
 });
@@ -129,7 +129,7 @@ test("Database flow: quote → checkout → concurrent booking → scan → COD;
     await admin.update({ role: "Viewer" }); assert.equal((await fetch(`${base}/status`, authorized)).status, 403); await admin.update({ role: "Admin" });
     process.env.EKART_WEBHOOK_SECRET = "fixture-webhook-secret-30-chars";
     assert.equal((await fetch(`${base}/webhook/incorrect`, { method: "POST", headers: { "Content-Type": "application/json" }, body: '{}' })).status, 404);
-    product = await Product.create({ name: "Ekart test fixture", slug: `ekart-test-${randomUUID()}`, categoryId: category.id, price: 100, stock: 10, status: "Active", shippingWeightGrams: 500, shippingLengthCm: 20, shippingWidthCm: 15, shippingHeightCm: 10 });
+    product = await Product.create({ name: "Ekart test fixture", slug: `ekart-test-${randomUUID()}`, categoryId: category.id, price: 100, stock: 10, status: "Active", shippingWeightGrams: 500, shippingWidthCm: 15, shippingHeightCm: 10 });
     const customer = { id: `ekart-test-${randomUUID()}`, email: null };
     const body = { name: "Ekart fixture", phone: "9000000000", paymentMethod: "cod", deliveryMode: "Delivery", address: { street: "Fixture only", city: "Koregaon", district: "Satara", state: "Maharashtra", pincode: "415501" }, items: [{ productId: product.id, quantity: 1 }] };
     async function place() {

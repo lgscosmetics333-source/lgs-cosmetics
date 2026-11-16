@@ -1,7 +1,17 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, notFound } from "@tanstack/react-router";
 import { AppShell, CatalogPage } from "@/components/commerce";
-import { useStoreCategories } from "@/lib/store-categories";
-export const Route = createFileRoute("/shop/$category")({ component: Page });
+export const Route = createFileRoute("/shop/$category")({
+  loader: async ({ params, parentMatchPromise }) => {
+    const parent = await parentMatchPromise;
+    const categories = parent?.loaderData?.categories;
+    if (!categories)
+      throw new Error("Collections are temporarily unavailable. Please try again shortly.");
+    const category = categories.find((item) => item.slug === params.category);
+    if (!category) throw notFound();
+    return { category };
+  },
+  component: Page,
+});
 function Page() {
   const { category } = Route.useParams();
   return (
@@ -12,7 +22,6 @@ function Page() {
 }
 
 function CategoryContent({ category }: { category: string }) {
-  const { data: categories = [] } = useStoreCategories();
-  const current = categories.find((item) => item.slug === category);
-  return <CatalogPage title={current?.name ?? "Beauty Collection"} filter={(product) => product.category === category} />;
+  const { category: current } = Route.useLoaderData();
+  return <CatalogPage title={current.name} filter={(product) => product.category === category} />;
 }

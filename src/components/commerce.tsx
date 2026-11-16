@@ -42,7 +42,7 @@ import {
 import { useLocation } from "@tanstack/react-router";
 import { usePageContent } from "@/lib/site-settings";
 import { useStoreCategories } from "@/lib/store-categories";
-import { ShopProvider, useShop } from "@/lib/shop-store";
+import { useShop } from "@/lib/shop-store";
 import { ADMIN_API_BASE, resolveImageUrl } from "@/lib/admin-api";
 import heroGlow from "@/assets/hero-glow.jpg";
 import heroFestive from "@/assets/hero_festive.png";
@@ -75,7 +75,7 @@ const nav = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <ShopProvider>
+    <>
       <Header />
       <main>{children}</main>
       <Footer />
@@ -83,7 +83,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <SearchOverlay />
       <Toaster position="top-center" richColors />
       <SocialFloatingButtons />
-    </ShopProvider>
+    </>
   );
 }
 
@@ -410,6 +410,7 @@ const heroes = [
 ];
 export function HomePage() {
   const heroTouchStart = useRef<number | null>(null);
+  const { site } = useSiteSettings();
   const { adminProducts } = useShop();
   type TrendKey = "skin" | "hair" | "lgs";
   const [slide, setSlide] = useState(0),
@@ -448,9 +449,9 @@ export function HomePage() {
                 <p className={`text-xs font-bold uppercase tracking-[.16em] sm:tracking-[.22em] ${h.light ? "text-wine/75" : "text-gold-soft"}`}>
                   {h.kicker}
                 </p>
-                <h1 className="mt-3 max-w-md text-[clamp(2rem,8vw,2.5rem)] leading-[1.1] md:text-5xl xl:text-6xl">
+                <h2 className="mt-3 max-w-md text-[clamp(2rem,8vw,2.5rem)] leading-[1.1] md:text-5xl xl:text-6xl">
                   {h.title}
-                </h1>
+                </h2>
                 <p className="mt-4 max-w-sm text-[15px] leading-6 opacity-85 md:text-base md:leading-7">
                   {h.copy}
                 </p>
@@ -491,6 +492,15 @@ export function HomePage() {
             ><span className={`block h-1.5 rounded-full transition-all ${i === slide ? "w-7 bg-gold" : "w-2 bg-gold/50"}`} /></button>
           ))}
         </div>
+      </section>
+      <section className="container-lv py-9 text-center sm:py-12" aria-labelledby="store-introduction">
+        <h1 id="store-introduction" className="text-2xl text-wine sm:text-3xl">Skin & Hair Care in Koregaon, Satara</h1>
+        <p className="mx-auto mt-4 max-w-3xl text-sm leading-7 text-muted-foreground">
+          Explore LGS skincare, hair care and everyday personal care products at {site.name}.
+          Browse our <a href="/lgs-products" className="underline underline-offset-4">LGS collection</a> online,
+          or visit us at {site.address.line1}, {site.address.line2}.
+          For product and shopping questions, <a href="/contact" className="underline underline-offset-4">contact our store</a>.
+        </p>
       </section>
       <ProductSection
         title="Our Best Sellers"

@@ -6,7 +6,7 @@ import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { upload } from "../middleware/upload.js";
 
 function attachProductImages(req, _res, next) {
-  for (const key of ["shippingWeightGrams", "shippingLengthCm", "shippingWidthCm", "shippingHeightCm"]) {
+  for (const key of ["shippingWeightGrams", "shippingWidthCm", "shippingHeightCm"]) {
     if (req.body[key] === "") req.body[key] = null;
     else if (req.body[key] != null) {
       const number = Number(req.body[key]);

@@ -10,6 +10,7 @@ import {
 import { toast } from "sonner";
 import { type Product } from "@/data/catalog";
 import { ADMIN_API_BASE, resolveImageUrl } from "@/lib/admin-api";
+import type { CatalogProduct } from "@/lib/catalog-api";
 
 export type CartLine = { id: string; qty: number; shade?: string | undefined; variant?: string | undefined };
 
@@ -42,22 +43,23 @@ const ShopContext = createContext<ShopState | null>(null);
 const CART_KEY = "lv-cart";
 const WISH_KEY = "lv-wishlist";
 
-export function ShopProvider({ children }: { children: ReactNode }) {
+export function ShopProvider({ children, initialProducts = null }: { children: ReactNode; initialProducts?: CatalogProduct[] | null }) {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [wishlist, setWishlist] = useState<string[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [catalogReady, setCatalogReady] = useState(false);
-  const [adminProducts, setAdminProducts] = useState<Product[]>([]);
+  const [adminProducts, setAdminProducts] = useState<Product[]>(() => (initialProducts ?? []).map(toStoreProduct));
   const [catalogError, setCatalogError] = useState(false);
   const catalogProducts = adminProducts;
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
     async function loadProducts() {
       const data = [];
       for (let page = 1; ; page += 1) {
-        const response = await fetch(`${ADMIN_API_BASE}/api/products?limit=100&page=${page}`);
+        const response = await fetch(`${ADMIN_API_BASE}/api/products?limit=100&page=${page}`, { signal: controller.signal });
         if (!response.ok) throw new Error("Unable to load products");
         const payload = await response.json();
         if (!Array.isArray(payload?.data)) throw new Error("Invalid products response");
@@ -72,10 +74,12 @@ export function ShopProvider({ children }: { children: ReactNode }) {
         setAdminProducts(payload.data.filter((item) => item.status === "Active").map(toStoreProduct));
       })
       .catch(() => { if (active) setCatalogError(true); })
-      .finally(() => {
-        if (active) setCatalogReady(true);
-      });
-    return () => { active = false; };
+      .finally(() => clearTimeout(timeout));
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+      controller.abort();
+    };
   }, []);
 
   useEffect(() => {
@@ -176,7 +180,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     };
   }, [cart, wishlist, cartOpen, searchOpen, adminProducts, catalogProducts, catalogError, addToCart, removeFromCart, setQty, toggleWishlist, clearCart]);
 
-  return <ShopContext.Provider value={value}>{catalogReady ? children : <div className="grid min-h-screen place-items-center bg-[#f7f4ef] text-sm text-stone-500">Loading store...</div>}</ShopContext.Provider>;
+  return <ShopContext.Provider value={value}>{children}</ShopContext.Provider>;
 }
 
 function toStoreProduct(remote: any): Product {
