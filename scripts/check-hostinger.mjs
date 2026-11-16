@@ -155,6 +155,10 @@ try {
   assert.equal(upload.status, 200);
   assert.match(upload.headers.get("content-type"), /image\/png/);
   await upload.arrayBuffer();
+  const restoredImage = await fetch(`${origin}/uploads/1788341676424-11.png`);
+  assert.equal(restoredImage.status, 200, "Restored catalog images must be served when absent from UPLOAD_DIR");
+  assert.match(restoredImage.headers.get("content-type"), /image\/png/);
+  await restoredImage.arrayBuffer();
   const { saveInstagramPreview } = await import(
     releaseModule("backend/services/instagramPreview.js")
   );

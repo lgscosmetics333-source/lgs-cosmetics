@@ -3,6 +3,7 @@ import { razorpayWebhook } from "./services/razorpayService.js";
 import { startOrderEmailWorker } from "./services/orderEmailService.js";
 import express from "express";
 import cors from "cors";
+import path from "node:path";
 import { uploadsDirectory } from "./config/paths.js";
 import { initializeDatabase } from "./config/database.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
@@ -88,7 +89,9 @@ export function createBackendApp({ frontend, publicDirectory, isReady = () => tr
     razorpayWebhook,
   );
   app.use("/api", express.json({ limit: "10mb" }), express.urlencoded({ extended: true }));
-  app.use("/uploads", express.static(uploadsDirectory), notFound);
+  app.use("/uploads", express.static(uploadsDirectory));
+  if (publicDirectory) app.use("/uploads", express.static(path.join(path.dirname(publicDirectory), "legacy-uploads")));
+  app.use("/uploads", notFound);
 
   app.use("/api/auth", authRoutes);
   app.use("/api/products", productRoutes);
