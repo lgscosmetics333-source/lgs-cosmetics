@@ -50,6 +50,12 @@ For production images, set **`UPLOAD_DIR`** to an absolute, writable directory o
 
 Existing database records and uploaded images are not in GitHub. Reuse the existing MySQL database credentials or migrate its data securely; the build does not seed or replace your products. Startup runs the existing application/auth schema initialization. Do not run the development seed script on a live customer database.
 
+## Optional fresh-database import
+
+The app creates and updates its tables automatically after it connects to MySQL, so importing SQL is optional. For a new, empty Hostinger database, you can instead import `backend/database/hostinger-import.sql` through phpMyAdmin after selecting that database. It contains the core table structure and the 5 public product categories plus 14 catalog products from the repository. Better Auth creates its customer-auth tables at first successful startup.
+
+This starter file does not contain customer records, orders, reviews, uploaded files, or an admin account. Import it only once into an empty database. For an existing store database, migrate its own export rather than importing this starter file. To regenerate it after catalog or image changes, run `npm run build:hostinger` and then `node backend/scripts/export-hostinger-database.mjs`.
+
 ## Start and verify
 
 After deploying, runtime logs should show `LGS frontend + API listening on port ...` and, after MySQL connects, `LGS database and customer authentication are ready.`
