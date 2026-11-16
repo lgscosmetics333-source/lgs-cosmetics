@@ -88,7 +88,7 @@ const product = {
   shortDescription: "Combined app test product.",
   mainImage: "/og-image.png",
   category: { slug: "skin-care", name: "Skin Care" },
-  tags: ["bestseller"],
+  tags: ["bestseller", "new"],
 };
 Product.findAndCountAll = async () => ({ count: 1, rows: [product] });
 Product.findAll = async () => [{ slug: product.slug }];
@@ -111,6 +111,10 @@ try {
   await app.initialization;
   assert.equal(initialized, 1);
   const origin = `http://127.0.0.1:${app.server.address().port}`;
+  const arrivals = await fetch(`${origin}/new-arrivals`);
+  const arrivalsHtml = await arrivals.text();
+  assert.equal(arrivals.status, 200);
+  assert.ok(arrivalsHtml.includes(product.name), "New arrivals must contain products in server-rendered HTML");
   assert.equal(process.env.LGS_INTERNAL_API_ORIGIN, origin);
   const read = async (path, options) => {
     const response = await fetch(`${origin}${path}`, options);

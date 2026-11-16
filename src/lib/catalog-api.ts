@@ -43,6 +43,10 @@ export async function readCatalog<T>(
   signal: AbortSignal,
   baseOverride?: string,
 ): Promise<T[]> {
+  const readLocal = (globalThis as typeof globalThis & {
+    lgsReadServerCatalog?: (resource: "products" | "product-categories") => Promise<T[]>;
+  }).lgsReadServerCatalog;
+  if (typeof window === "undefined" && readLocal && !baseOverride) return readLocal(resource);
   const base = baseOverride ?? getApiBase();
   const items: T[] = [];
   for (let page = 1; ; page++) {

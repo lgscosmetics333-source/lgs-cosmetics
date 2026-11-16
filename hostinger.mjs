@@ -50,6 +50,10 @@ export async function startCombinedServer({
       frontend: frontendModule.middleware,
       publicDirectory: path.join(outputDirectory, "public"),
     });
+    globalThis.lgsReadServerCatalog = async (resource) => {
+      if (!ready) throw new Error("Catalog database is not ready");
+      return backendModule.readServerCatalog(resource);
+    };
   } catch (error) {
     await new Promise((resolve) => server.close(resolve));
     throw error;
@@ -86,6 +90,7 @@ export async function startCombinedServer({
       stopped = true;
       ready = false;
       clearTimeout(retryTimer);
+      delete globalThis.lgsReadServerCatalog;
       await new Promise((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),
       );
