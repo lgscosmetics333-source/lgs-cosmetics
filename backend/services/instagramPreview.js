@@ -1,5 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import path from "node:path";
+import { uploadsDirectory } from "../config/paths.js";
 
 function decode(value) {
   return value.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
@@ -36,9 +38,9 @@ export async function saveInstagramPreview(link) {
   const ext = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }[response.headers.get("content-type")?.split(";")[0]];
   if (!ext) throw new Error("Unsupported thumbnail format");
   const bytes = await readLimited(response, 5 * 1024 * 1024);
-  const folder = new URL("../uploads/", import.meta.url);
+  const folder = uploadsDirectory;
   await mkdir(folder, { recursive: true });
   const filename = `instagram-${randomUUID()}.${ext}`;
-  await writeFile(new URL(filename, folder), bytes);
+  await writeFile(path.join(folder, filename), bytes);
   return `/uploads/${filename}`;
 }

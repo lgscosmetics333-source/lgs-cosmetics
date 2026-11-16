@@ -10,7 +10,7 @@ export const customerPool = createPool({
 const frontend = process.env.FRONTEND_URL || "http://localhost:8080";
 export const customerAuth = betterAuth({
   appName: "LGS Cosmetics",
-  baseURL: process.env.CUSTOMER_AUTH_URL || "http://localhost:5000",
+  baseURL: process.env.CUSTOMER_AUTH_URL || process.env.FRONTEND_URL || "http://localhost:5000",
   basePath: "/api/customer-auth",
   secret: process.env.CUSTOMER_AUTH_SECRET || process.env.JWT_SECRET,
   database: customerPool,

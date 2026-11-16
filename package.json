@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "vite build",
-    "start": "node .output/server/index.mjs",
+    "build:hostinger": "node scripts/build-hostinger.mjs",
+    "start": "node hostinger.mjs",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "dev:frontend": "vite dev",
@@ -16,6 +17,7 @@
     "db:seed": "npm --prefix backend run db:seed",
     "lint": "eslint .",
     "check:seo": "node scripts/check-seo.mjs",
+    "check:hostinger": "node scripts/check-hostinger.mjs",
     "format": "prettier --write .",
     "postinstall": "npm --prefix backend ci --omit=dev"
   },

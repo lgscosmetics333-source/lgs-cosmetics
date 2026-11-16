@@ -1,12 +1,6 @@
 import { Sequelize } from "sequelize";
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
+import "./env.js";
 import { syncDatabaseSchema } from "./schema.js";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, "../.env"), override: true });
 
 export const sequelize = new Sequelize(
   process.env.DB_NAME ?? "lgs_db",
@@ -20,7 +14,7 @@ export const sequelize = new Sequelize(
   },
 );
 
-export async function initializeDatabase() {
+export async function initializeDatabase({ required = false } = {}) {
   // Models are loaded lazily to avoid circular imports.
   const { syncModels } = await import("../models/index.js");
   syncModels();
@@ -30,6 +24,7 @@ export async function initializeDatabase() {
     await syncDatabaseSchema(sequelize);
     console.log("Database connection established.");
   } catch (error) {
+    if (required) throw error;
     console.warn("Database connection failed. Backend will still start, but API calls will error until MySQL is available.");
     console.warn(error?.message ?? error);
   }

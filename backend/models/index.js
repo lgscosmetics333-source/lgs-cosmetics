@@ -14,22 +14,27 @@ import { Review } from "./Review.js";
 import { OrderEvent } from "./OrderEvent.js";
 import { OrderEmail } from "./OrderEmail.js";
 
+let associationsInitialized = false;
+
 export function syncModels() {
-  ProductCategory.hasMany(Product, { foreignKey: "categoryId", as: "products" });
-  Product.belongsTo(ProductCategory, { foreignKey: "categoryId", as: "category" });
+  if (!associationsInitialized) {
+    ProductCategory.hasMany(Product, { foreignKey: "categoryId", as: "products" });
+    Product.belongsTo(ProductCategory, { foreignKey: "categoryId", as: "category" });
 
-  Product.hasMany(ProductImage, { foreignKey: "productId", as: "images", onDelete: "CASCADE" });
-  ProductImage.belongsTo(Product, { foreignKey: "productId", as: "product" });
+    Product.hasMany(ProductImage, { foreignKey: "productId", as: "images", onDelete: "CASCADE" });
+    ProductImage.belongsTo(Product, { foreignKey: "productId", as: "product" });
 
-  BlogCategory.hasMany(Blog, { foreignKey: "categoryId", as: "blogs" });
-  Blog.belongsTo(BlogCategory, { foreignKey: "categoryId", as: "category" });
+    BlogCategory.hasMany(Blog, { foreignKey: "categoryId", as: "blogs" });
+    Blog.belongsTo(BlogCategory, { foreignKey: "categoryId", as: "category" });
 
-  Order.hasMany(OrderItem, { foreignKey: "orderId", as: "items", onDelete: "CASCADE" });
-  OrderItem.belongsTo(Order, { foreignKey: "orderId", as: "order" });
-  OrderItem.belongsTo(Product, { foreignKey: "productId", as: "product" });
-  Order.hasMany(OrderEvent, { foreignKey: "orderId", as: "events", onDelete: "CASCADE" });
-  OrderEvent.belongsTo(Order, { foreignKey: "orderId", as: "order" });
-  Order.hasMany(OrderEmail, { foreignKey: "orderId", as: "emails", onDelete: "CASCADE" });
+    Order.hasMany(OrderItem, { foreignKey: "orderId", as: "items", onDelete: "CASCADE" });
+    OrderItem.belongsTo(Order, { foreignKey: "orderId", as: "order" });
+    OrderItem.belongsTo(Product, { foreignKey: "productId", as: "product" });
+    Order.hasMany(OrderEvent, { foreignKey: "orderId", as: "events", onDelete: "CASCADE" });
+    OrderEvent.belongsTo(Order, { foreignKey: "orderId", as: "order" });
+    Order.hasMany(OrderEmail, { foreignKey: "orderId", as: "emails", onDelete: "CASCADE" });
+    associationsInitialized = true;
+  }
 
   return {
     Admin,

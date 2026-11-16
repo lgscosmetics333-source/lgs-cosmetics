@@ -1,5 +1,4 @@
-import { ADMIN_API_BASE } from "./admin-api";
-import { SITE_ORIGIN } from "./seo";
+import { getApiBase } from "./admin-api";
 
 export type CatalogProduct = {
   id: number;
@@ -43,7 +42,7 @@ export async function readCatalog<T>(
   resource: "products" | "product-categories",
   signal: AbortSignal,
 ): Promise<T[]> {
-  const base = ADMIN_API_BASE || (typeof window === "undefined" ? SITE_ORIGIN : "");
+  const base = getApiBase();
   const items: T[] = [];
   for (let page = 1; ; page++) {
     const response = await fetch(`${base}/api/${resource}?limit=100&page=${page}`, { signal });

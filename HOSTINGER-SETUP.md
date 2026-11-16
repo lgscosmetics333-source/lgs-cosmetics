@@ -1,52 +1,77 @@
-# Hostinger deployment
+# One Hostinger website: frontend + backend
 
-The storefront is TanStack Start/Nitro SSR. The API is a separate Express/MySQL app. Deploy both as Node.js Web Apps, not Advanced > GIT publishing into public_html.
+Deploy this repository as **one Node.js Web App**. The single process serves the storefront, admin, API, customer authentication and uploaded images on `https://lgscosmetics.com`. MySQL is the separate database service supplied by your hosting plan; a second backend website is not needed.
 
-## Storefront app
+## Hostinger deployment settings
 
-- Repository: webakoofgit-png/LGS-Cosmetic, branch main
-- Root: ./
-- Framework: Nitro
-- Node: 22.x
-- Build: npm run build
-- Output: .output
-- Entry (relative to output): server/index.mjs
-- Build environment: DEPLOY_TARGET=hostinger
-- Build environment: VITE_API_URL=https://YOUR-BACKEND-HOST (no trailing slash)
-- Runtime: NODE_ENV=production
+| Setting                         | Value                                  |
+| ------------------------------- | -------------------------------------- |
+| Repository                      | `lgscosmetics333-source/lgs-cosmetics` |
+| Branch                          | `main`                                 |
+| Root directory                  | `./`                                   |
+| Framework                       | **Nitro**                              |
+| Node.js                         | **22.x**                               |
+| Package manager                 | **npm**                                |
+| Install command, if shown       | `npm ci --include=dev`                 |
+| Build command                   | **`npm run build:hostinger`**          |
+| Output directory                | **`.output`**                          |
+| Entry file (relative to output) | **`app.mjs`**                          |
 
-DEPLOY_TARGET explicitly selects Nitro's Node server preset. Without it, the existing Lovable/Cloudflare build remains available. Do not use the Cloudflare worker output as a Node server.
+Use the custom build command above, rather than the generic `npm run build`. The generic build remains available for existing Vercel/Lovable integrations. Do not start `server/index.mjs` on Hostinger: it is now imported middleware, not the combined app's listener. Do not use `npm run dev`, two child processes or a separate backend port in production.
 
-Hostinger builds send browser requests to same-origin /api and /uploads paths. Nitro forwards those paths to the fixed VITE_API_URL backend configured at build time. This avoids cross-domain browser CORS and third-party session cookie restrictions. Keep VITE_API_URL set to the actual backend origin and rebuild after changing it. There is no API response caching; login cookies and admin authorization are forwarded by the proxy.
+`build:hostinger` selects the Nitro Node middleware preset automatically, then packages the API and its locked production dependencies into `.output/backend`. The output contains everything needed to run `node .output/app.mjs`. No development `.env`, database dump, existing upload or test file is included. `npm ci` at the repository root installs both frontend and backend dependencies through the existing postinstall script.
 
-## API app
+## Hostinger environment variables
 
-Create another Node.js Web App from the same repository. Use root backend, Node 22.x, Express (or Other), package manager npm and entry server.js. The API is plain JavaScript and has no compilation step; use the provider's no-build setting. If a build command is mandatory, use node --check server.js. Publish the backend root, not the frontend .output directory.
+Add these in the **same website's Environment variables** screen, before deployment. Use the actual MySQL database details from your hosting account and two different random secrets of at least 32 characters.
 
-The backend has its own package-lock.json and is deliberately not an npm workspace. This keeps sequelize and all API dependencies inside backend/node_modules when Hostinger publishes only the selected root directory. Use npm ci in backend; root installation also installs the backend through its postinstall script for local development.
-
-Set these backend-only environment variables through Hostinger:
-
-```
+```dotenv
 NODE_ENV=production
-DB_HOST=<Hostinger MySQL host reachable from the Node app>
+DB_HOST=YOUR_MYSQL_HOST
 DB_PORT=3306
-DB_NAME=<database name>
-DB_USER=<database user>
-DB_PASSWORD=<database password>
-JWT_SECRET=<unique random secret, at least 32 characters>
-CUSTOMER_AUTH_SECRET=<different random secret, at least 32 characters>
-FRONTEND_URL=https://YOUR-STOREFRONT-HOST
-CUSTOMER_AUTH_URL=https://YOUR-BACKEND-HOST
+DB_NAME=YOUR_DATABASE_NAME
+DB_USER=YOUR_DATABASE_USER
+DB_PASSWORD=YOUR_DATABASE_PASSWORD
+JWT_SECRET=YOUR_RANDOM_ADMIN_SECRET
+CUSTOMER_AUTH_SECRET=YOUR_DIFFERENT_RANDOM_AUTH_SECRET
+FRONTEND_URL=https://lgscosmetics.com
+CUSTOMER_AUTH_URL=https://lgscosmetics.com
 RAZORPAY_ENABLED=false
 RESEND_ENABLED=false
 RESEND_DOMAIN_VERIFIED=false
+EKART_ENABLED=false
 ```
 
-Hostinger supplies the listening PORT; do not set localhost:5000 as the public API URL. After creating the API app, rebuild the storefront with its real HTTPS VITE_API_URL. Browser requests use the storefront proxy, including customer session requests. FRONTEND_URL on the backend must match the storefront origin for authentication origin checks. Before using live domains, verify login/session cookies, checkout and admin updates through the proxy.
+Hostinger supplies `PORT`; remove any manually configured `PORT=5000`. The app listens on `0.0.0.0` on that assigned port. Remove old `VITE_API_URL`, `VITE_API_MODE` and `LGS_INTERNAL_API_ORIGIN` values from Hostinger; the combined build uses relative `/api` URLs in the browser and creates its own loopback API URL for SSR. A `DEPLOY_TARGET` environment variable is no longer required: the build script selects Hostinger itself.
 
-Create the database first. Backend startup creates application and customer-auth tables. Import the existing local MySQL data securely if you want the existing products, categories and content; the Git repository does not contain the database. Do not run the development seed script blindly on production. Keep uploads on persistent storage or restore them after deployments; verify Hostinger upload persistence before taking customer orders.
+Use the same public origin for both authentication URLs, without a trailing slash. If the canonical domain changes, update these values and the canonical origin in `src/lib/seo.ts` together.
 
-Check API /api/health, then actual /api/products and database-dependent endpoints. On the storefront check products, images, customer sign-in, cart, checkout and admin order history. Configure SMTP/Resend and Razorpay separately using backend/COMMERCE-SETUP.md. Keep both disabled until configured.
+For production images, set **`UPLOAD_DIR`** to an absolute, writable directory outside the deployment output which Hostinger preserves across releases. Restore the old backend's `uploads` files into this directory. If it is omitted, uploads are stored in the app's `backend/uploads` directory and may be replaced by the next deployment. Confirm persistence with Hostinger before accepting customer orders.
 
-Once temporary testing succeeds, connect the final storefront/API domains and update FRONTEND_URL, CUSTOMER_AUTH_URL and VITE_API_URL accordingly.
+Existing database records and uploaded images are not in GitHub. Reuse the existing MySQL database credentials or migrate its data securely; the build does not seed or replace your products. Startup runs the existing application/auth schema initialization. Do not run the development seed script on a live customer database.
+
+## Start and verify
+
+After deploying, runtime logs should show `LGS frontend + API listening on port ...` and, after MySQL connects, `LGS database and customer authentication are ready.`
+
+- `/` renders the storefront, metadata and GTM container.
+- `/api/health` returns HTTP 200 only after database/auth initialization succeeds.
+- `/api/products` returns real catalog data from the same website.
+- `/admin/login` and `/account` use this same origin. Verify a real sign-in/session, then verify admin changes and a test checkout.
+- `/uploads/...` serves your restored product images.
+- `/robots.txt`, `/sitemap.xml` and `/google1c15fb62e2b5282c.html` are available on the same domain.
+
+If MySQL is unavailable, the listener and static storefront remain online, API requests return 503 and initialization retries every 30 seconds. The sitemap also returns a temporary 503 instead of removing real products from the index. Check Runtime logs and correct the database credentials/host; a visible homepage alone does not establish that checkout and authentication work.
+
+Configure Razorpay, email and Ekart separately using `backend/COMMERCE-SETUP.md`. Leave their enable flags false until configured. For this combined deployment, `EKART_PUBLIC_BACKEND_URL`, if enabled, is also `https://lgscosmetics.com`; configure provider callbacks/webhooks on this same domain.
+
+## Local verification
+
+```sh
+npm ci
+npm run build:hostinger
+npm run check:hostinger
+npx tsc --noEmit
+```
+
+The packaged-app test exercises one HTTP listener, API routing, SSR product content, auth adapter/body/cookie forwarding, protected admin writes, static assets and unavailable-database behavior. It mocks database reads and authentication persistence; it does not validate real MySQL access, payment/shipping providers or a deployed customer login. For a local run with a configured database, use `npm start` after `npm run build:hostinger`.

@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ADMIN_API_BASE } from "./admin-api";
-import { SITE_ORIGIN } from "./seo";
+import { getApiBase } from "./admin-api";
 
 export const seoDefaults = {
   title: "LGS Cosmetics | Skin & Hair Care in Koregaon, Satara",
@@ -28,7 +27,7 @@ export const editablePages = [
 export type PageContent = { title: string; intro: string; body: string };
 
 export async function readSiteSetting<T>(key: string, signal?: AbortSignal): Promise<T | null> {
-  const base = ADMIN_API_BASE || (typeof window === "undefined" ? SITE_ORIGIN : "");
+  const base = getApiBase();
   const response = await fetch(`${base}/api/site-settings/${key}`, signal ? { signal } : {});
   if (!response.ok) throw new Error("Unable to load website settings.");
   const payload = await response.json();

@@ -1,10 +1,7 @@
 import multer from "multer";
 import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
+import { uploadsDirectory as uploadDirectory } from "../config/paths.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const uploadDirectory = path.resolve(__dirname, "../uploads");
 fs.mkdirSync(uploadDirectory, { recursive: true });
 
 const storage = multer.diskStorage({
