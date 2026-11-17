@@ -39,12 +39,12 @@ export type CatalogCategory = {
 // On same-origin production hosting, SSR needs an absolute URL; browsers can
 // continue using the existing relative /api proxy. No credentials are involved.
 export async function readCatalog<T>(
-  resource: "products" | "product-categories",
+  resource: "products" | "product-categories" | "blogs",
   signal: AbortSignal,
   baseOverride?: string,
 ): Promise<T[]> {
   const readLocal = (globalThis as typeof globalThis & {
-    lgsReadServerCatalog?: (resource: "products" | "product-categories") => Promise<T[]>;
+    lgsReadServerCatalog?: (resource: "products" | "product-categories" | "blogs") => Promise<T[]>;
   }).lgsReadServerCatalog;
   if (typeof window === "undefined" && readLocal && !baseOverride) return readLocal(resource);
   const base = baseOverride ?? getApiBase();

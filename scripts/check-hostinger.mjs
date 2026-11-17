@@ -54,7 +54,7 @@ const nitro = JSON.parse(await readFile(new URL("../.output/nitro.json", import.
 assert.equal(nitro.preset, "node-middleware");
 
 const { startCombinedServer } = await import(releaseModule("hostinger.mjs"));
-const { Product, ProductCategory, SiteSetting, syncModels } = await import(
+const { Product, ProductCategory, Blog, SiteSetting, syncModels } = await import(
   releaseModule("backend/models/index.js")
 );
 const { customerAuth, customerPool } = await import(
@@ -93,6 +93,10 @@ const product = {
 Product.findAndCountAll = async () => ({ count: 1, rows: [product] });
 Product.findAll = async () => [{ slug: product.slug }];
 ProductCategory.findAll = async () => [{ slug: "skin-care" }];
+Blog.findAndCountAll = async (options) => {
+  assert.deepEqual(options.where, { status: "Published" });
+  return { count: 1, rows: [{ id: 1, title: "Fixture skincare article", status: "Published", excerpt: "Useful skincare advice", content: "<p>Cleanse gently.</p>" }] };
+};
 ProductCategory.findAndCountAll = async () => ({
   count: 1,
   rows: [{ slug: "skin-care", name: "Skin Care", status: "Active" }],
@@ -115,6 +119,10 @@ try {
   const arrivalsHtml = await arrivals.text();
   assert.equal(arrivals.status, 200);
   assert.ok(arrivalsHtml.includes(product.name), "New arrivals must contain products in server-rendered HTML");
+  const blogResponse = await fetch(`${origin}/blog`);
+  const blogHtml = await blogResponse.text();
+  assert.equal(blogResponse.status, 200);
+  assert.ok(blogHtml.includes("Fixture skincare article"), "Published blog titles must appear in server-rendered HTML");
   assert.equal(process.env.LGS_INTERNAL_API_ORIGIN, origin);
   const read = async (path, options) => {
     const response = await fetch(`${origin}${path}`, options);

@@ -25,15 +25,15 @@ import { getMigrations } from "better-auth/db/migration";
 import { customerAuth, customerPool } from "./config/customer-auth.js";
 import { customerRoutes } from "./routes/customerRoutes.js";
 import { shippingRoutes, startEkartTrackingWorker } from "./routes/shippingRoutes.js";
-import { Product, ProductCategory, ProductImage } from "./models/index.js";
+import { Product, ProductCategory, ProductImage, Blog, BlogCategory } from "./models/index.js";
 
 export async function readServerCatalog(resource) {
-  const model = resource === "products" ? Product : resource === "product-categories" ? ProductCategory : null;
+  const model = resource === "products" ? Product : resource === "product-categories" ? ProductCategory : resource === "blogs" ? Blog : null;
   if (!model) throw new Error("Unsupported catalog resource");
-  const include = resource === "products" ? [{ model: ProductCategory, as: "category" }, { model: ProductImage, as: "images" }] : [];
+  const include = resource === "products" ? [{ model: ProductCategory, as: "category" }, { model: ProductImage, as: "images" }] : resource === "blogs" ? [{ model: BlogCategory, as: "category" }] : [];
   const items = [];
   for (let offset = 0; ; offset += 100) {
-    const { rows, count } = await model.findAndCountAll({ where: {}, include, limit: 100, offset, order: [["createdAt", "DESC"]], distinct: true });
+    const { rows, count } = await model.findAndCountAll({ where: resource === "blogs" ? { status: "Published" } : {}, include, limit: 100, offset, order: [["createdAt", "DESC"]], distinct: true });
     items.push(...rows.map(row => typeof row.toJSON === "function" ? row.toJSON() : row));
     if (items.length >= count || rows.length === 0) return items;
   }
