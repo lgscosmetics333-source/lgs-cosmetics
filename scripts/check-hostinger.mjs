@@ -78,7 +78,7 @@ customerAuth.handler = async (request) => {
 };
 const product = {
   id: 1,
-  slug: "combined-test-cleanser",
+  slug: "under-eye-gel",
   name: "Combined Test Cleanser",
   status: "Active",
   price: "299.00",
@@ -145,6 +145,7 @@ try {
   const details = await read(`/product/${product.slug}`);
   assert.equal(details.response.status, 200);
   assert.ok(details.text.includes("Combined app test product."));
+  assert.ok(details.text.includes("Carrot Oil"), "Brochure key ingredients should appear on the matching product page");
   assert.ok(details.text.includes('"@type":"Product"'));
   assert.equal((await read("/product/missing-product")).response.status, 404);
   const sitemap = await read("/sitemap.xml");

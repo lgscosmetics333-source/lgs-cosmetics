@@ -184,10 +184,20 @@ export function ShopProvider({ children, initialProducts = null }: { children: R
   return <ShopContext.Provider value={value}>{children}</ShopContext.Provider>;
 }
 
+// Ingredients explicitly named on the supplied product brochure. Admin-entered
+// ingredient lists take precedence when a fuller label is available.
+const brochureIngredients: Record<string, string[]> = {
+  "under-eye-gel": ["Carrot Oil", "Aloe Vera"],
+  "acne-pimple-oil-control-cream": ["Tea Tree Oil", "Aloe Vera"],
+  "anti-blemish-cream": ["Tulsi", "Neem", "Aloe Vera"],
+  "hair-serum": ["Vitamin E"],
+};
+
 function toStoreProduct(remote: any): Product {
   const image = resolveImageUrl(remote.mainImage) || "/placeholder.svg";
   const galleryImages = parseRemoteList(remote.additionalImages).map(resolveImageUrl);
   const variants = parseRemoteJson(remote.variants);
+  const ingredients = parseRemoteList(remote.ingredients);
   return {
     id: `admin-${remote.id}`, slug: remote.slug, name: remote.name,
     brand: remote.brand ?? "", category: remote.category?.slug ?? "",
@@ -200,7 +210,7 @@ function toStoreProduct(remote: any): Product {
     tags: parseRemoteList(remote.tags).filter((tag): tag is Product["tags"][number] =>
       ["bestseller", "new", "trending", "offer"].includes(tag)),
     description: remote.description ?? "", howToUse: remote.usage ?? "",
-    benefits: parseRemoteList(remote.benefits), keyIngredients: parseRemoteList(remote.ingredients),
+    benefits: parseRemoteList(remote.benefits), keyIngredients: ingredients.length ? ingredients : (brochureIngredients[remote.slug] ?? []),
     details: [],
   };
 }

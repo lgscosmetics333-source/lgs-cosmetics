@@ -1389,7 +1389,7 @@ export function ProductPage({ product }: { product: Product }) {
   const activeMrp = selectedVariant?.mrp ?? product.mrp;
   const currentDetails = [
     ...product.details,
-    ...(product.keyIngredients ? [`Key Ingredients: ${product.keyIngredients.join(", ")}`] : []),
+    ...(product.keyIngredients?.length ? [`Key Ingredients: ${product.keyIngredients.join(", ")}`] : []),
   ];
   return (
     <>
@@ -1546,7 +1546,7 @@ export function ProductPage({ product }: { product: Product }) {
                 ))}
               </ul>
             </div>
-            {product.keyIngredients && (
+            {!!product.keyIngredients?.length && (
               <div>
                 <h3 className="text-xl">Key Ingredients</h3>
                 <ul className="mt-2 list-inside list-disc text-sm leading-7 text-muted-foreground">
