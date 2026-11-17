@@ -72,8 +72,9 @@ export function ShopProvider({ children, initialProducts = null }: { children: R
       .then((payload) => {
         if (!active || !Array.isArray(payload?.data)) return;
         setAdminProducts(payload.data.filter((item) => item.status === "Active").map(toStoreProduct));
+        setCatalogError(false);
       })
-      .catch(() => { if (active) setCatalogError(true); })
+      .catch(() => { if (active && initialProducts === null) setCatalogError(true); })
       .finally(() => clearTimeout(timeout));
     return () => {
       active = false;
