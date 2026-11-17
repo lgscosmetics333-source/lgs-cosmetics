@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageHero } from "@/components/commerce";
 import { ADMIN_API_BASE, resolveImageUrl } from "@/lib/admin-api";
+import skincareImage from "@/assets/cat-skincare.jpg";
+import makeupImage from "@/assets/cat-makeup.jpg";
 
 type Blog = {
   id: number;
@@ -11,7 +13,12 @@ type Blog = {
   featuredImage?: string;
   author?: string;
   status: string;
+  category?: { slug?: string } | null;
 };
+
+function blogFallbackImage(blog: Blog) {
+  return blog.category?.slug === "makeup-guides" ? makeupImage : skincareImage;
+}
 
 export const Route = createFileRoute("/blog")({ component: BlogPage });
 
@@ -63,7 +70,16 @@ function BlogPage() {
           <div className="grid items-start gap-8 md:grid-cols-2 lg:grid-cols-3">
             {blogs.map((blog) => (
               <article key={blog.id} className="overflow-hidden border bg-white">
-                {blog.featuredImage && <img src={resolveImageUrl(blog.featuredImage)} alt={blog.title} loading="lazy" className="aspect-video w-full object-cover" />}
+                <img
+                  src={blog.featuredImage && blog.featuredImage !== "/assets/blog-placeholder.jpg" ? resolveImageUrl(blog.featuredImage) : blogFallbackImage(blog)}
+                  alt={blog.title}
+                  loading="lazy"
+                  className="aspect-video w-full object-cover"
+                  onError={(event) => {
+                    event.currentTarget.onerror = null;
+                    event.currentTarget.src = blogFallbackImage(blog);
+                  }}
+                />
                 <div className="space-y-4 p-6">
                   <h2 className="text-2xl text-wine">{blog.title}</h2>
                   {blog.author && <p className="text-sm text-muted-foreground">By {blog.author}</p>}
