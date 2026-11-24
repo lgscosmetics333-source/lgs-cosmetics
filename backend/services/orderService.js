@@ -25,10 +25,11 @@ export async function recordOrderEvent(order, note, transaction) {
 
 export async function createCustomerOrder(customer, body) {
   if (typeof body.checkoutKey !== "string" || !/^[a-f0-9-]{36}$/i.test(body.checkoutKey)) throw orderError("Invalid checkout request. Please refresh and try again.");
-  if (!["cod", "upi", "store"].includes(body.paymentMethod)) throw orderError("Choose a valid payment method.");
+  if (!["cod", "upi", "store", "pickup_qr"].includes(body.paymentMethod)) throw orderError("Choose a valid payment method.");
   if (body.paymentMethod === "upi" && !onlinePaymentAvailable()) throw orderError("Online payment is temporarily unavailable. Please choose cash on delivery or store pickup.", 503);
   if (!["Delivery", "Pickup"].includes(body.deliveryMode)) throw orderError("Choose delivery or store pickup.");
   if (body.paymentMethod === "store" && body.deliveryMode !== "Pickup") throw orderError("Pay at store requires store pickup.");
+  if (body.paymentMethod === "pickup_qr" && body.deliveryMode !== "Pickup") throw orderError("Pickup QR payment requires store pickup.");
   if (!Array.isArray(body.items) || !body.items.length || body.items.length > 50) throw orderError("Add between 1 and 50 items to your bag.");
   const name = String(body.name || "").trim(), phone = String(body.phone || "").replace(/[\s()-]/g, "");
   if (!name || name.length > 120 || !/^\+?\d{10,15}$/.test(phone)) throw orderError("Enter your name and a valid phone number.");
@@ -84,10 +85,11 @@ export async function createCustomerOrder(customer, body) {
         paymentMethod: body.paymentMethod, items, subtotal: subtotal / 100, discount: discount / 100, couponCode: coupon?.code, parcel }));
       shipping = money(deliveryQuote.shippingCharge);
     }
+    if (body.paymentMethod === "pickup_qr" && subtotal - discount + shipping <= 0) throw orderError("QR payment requires a positive order total. Please choose Pay at store.");
     const order = await Order.create({ customerId: customer.id, checkoutKey: key, orderNumber: `LGS-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 6).toUpperCase()}`,
       customerName: name, email: customer.email, phone, shippingAddress: body.deliveryMode === "Pickup" ? "Store pickup" : JSON.stringify(address), deliveryMode: body.deliveryMode,
       subtotal: subtotal / 100, discount: discount / 100, shippingCharge: shipping / 100, totalAmount: (subtotal - discount + shipping) / 100,
-      couponCode: coupon?.code || null, paymentMethod: body.paymentMethod, paymentStatus: body.paymentMethod === "upi" ? "Awaiting payment" : body.paymentMethod === "store" ? "Pay at store" : "Awaiting collection", orderStatus: "Pending",
+      couponCode: coupon?.code || null, paymentMethod: body.paymentMethod, paymentStatus: ["upi", "pickup_qr"].includes(body.paymentMethod) ? "Awaiting payment" : body.paymentMethod === "store" ? "Pay at store" : "Awaiting collection", orderStatus: "Pending",
       ...(deliveryQuote ? { shippingDetails: { parcel: deliveryQuote.parcel, estimate: deliveryQuote.estimate, estimatedDays: deliveryQuote.estimatedDays, quotedCharge: deliveryQuote.shippingCharge } } : {}),
     }, { transaction });
     await OrderItem.bulkCreate(snapshots.map((item) => ({ ...item, orderId: order.id })), { transaction });
@@ -108,18 +110,18 @@ export async function updateOrder(id, body) {
     const status = body.orderStatus || order.orderStatus;
     if (status === "Cancelled" && order.shippingProvider === "Ekart" && order.shipmentState !== "Cancelled") throw orderError("Cancel the Ekart shipment before cancelling this order.", 409);
     const requestedPayment = body.paymentStatus || order.paymentStatus;
-    const payment = requestedPayment === "Pending" && order.paymentStatus === "Pending" ? (order.paymentMethod === "upi" ? "Awaiting payment" : order.paymentMethod === "store" ? "Pay at store" : "Awaiting collection") : requestedPayment;
+    const payment = requestedPayment === "Pending" && order.paymentStatus === "Pending" ? (["upi", "pickup_qr"].includes(order.paymentMethod) ? "Awaiting payment" : order.paymentMethod === "store" ? "Pay at store" : "Awaiting collection") : requestedPayment;
     if (!orderStatuses.includes(status) || !paymentStatuses.includes(payment)) throw orderError("Choose a valid order and payment status.");
     if (order.paymentMethod === "upi" && payment !== order.paymentStatus) throw orderError("Online payment status must be verified by the payment gateway.");
     if (status !== order.orderStatus && !(transitions[order.orderStatus] || []).includes(status)) throw orderError(`Cannot change ${order.orderStatus} to ${status}.`);
     if (order.orderStatus === "Cancelled" && payment !== order.paymentStatus && payment !== "Refunded") throw orderError("Cancelled orders can only be marked refunded.");
-    const allowedPayments = order.paymentMethod === "upi" ? ["Awaiting payment", "Verification pending", "Paid", "Failed", "Refunded"] : order.paymentMethod === "store" ? ["Pay at store", "Paid", "Refunded"] : ["Awaiting collection", "Paid", "Refunded"];
+    const allowedPayments = ["upi", "pickup_qr"].includes(order.paymentMethod) ? ["Awaiting payment", "Verification pending", "Paid", "Failed", "Refunded"] : order.paymentMethod === "store" ? ["Pay at store", "Paid", "Refunded"] : ["Awaiting collection", "Paid", "Refunded"];
     if (!allowedPayments.includes(payment)) throw orderError("This payment status does not match the payment method.");
     if (order.paymentStatus === "Paid" && !["Paid", "Refunded"].includes(payment)) throw orderError("A collected payment cannot be changed back to unpaid.");
     if (payment === "Refunded" && !["Paid", "Refunded"].includes(order.paymentStatus)) throw orderError("Only a collected payment can be refunded.");
     if (order.deliveryMode === "Pickup" && ["Shipped", "Out for delivery"].includes(status)) throw orderError("Use Ready for pickup for store pickup orders.");
     if (order.deliveryMode !== "Pickup" && status === "Ready for pickup") throw orderError("This order needs delivery.");
-    if (["Shipped", "Out for delivery", "Ready for pickup", "Delivered"].includes(status) && order.paymentMethod === "upi" && payment !== "Paid") throw orderError("Verify the UPI payment before dispatching this order.");
+    if (["Shipped", "Out for delivery", "Ready for pickup", "Delivered"].includes(status) && ["upi", "pickup_qr"].includes(order.paymentMethod) && payment !== "Paid") throw orderError("Verify the UPI payment before fulfilling this order.");
     if (status === "Delivered" && payment !== "Paid") throw orderError("Confirm payment was collected before marking the order delivered.");
     const details = {};
     for (const [field, max] of Object.entries({ courierName: 100, trackingNumber: 150, trackingUrl: 1000 })) {

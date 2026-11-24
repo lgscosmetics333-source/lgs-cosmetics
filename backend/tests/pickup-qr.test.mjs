@@ -1,0 +1,37 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { sequelize } from "../config/database.js";
+import { Product, Order, OrderItem, OrderEvent, OrderEmail } from "../models/index.js";
+import { createCustomerOrder, updateOrder } from "../services/orderService.js";
+
+test("pickup QR stays unpaid until store confirmation and cannot be used for delivery", async (t) => {
+  const transaction = { LOCK: { UPDATE: "UPDATE" } };
+  t.mock.method(sequelize, "transaction", async (fn) => fn(transaction));
+  t.mock.method(Order, "findOne", async () => null);
+  const item = { id: 1, name: "Fixture product", status: "Active", stock: 3, price: 299, variants: [], decrement: async () => {} };
+  t.mock.method(Product, "findAll", async () => [item]);
+  t.mock.method(OrderItem, "bulkCreate", async () => []);
+  t.mock.method(OrderEvent, "create", async () => ({ id: 10 }));
+  t.mock.method(OrderEmail, "create", async () => ({}));
+  t.mock.method(Order, "create", async (values) => ({ id: 11, ...values }));
+  const customer = { id: "customer-fixture", email: "fixture@example.test" };
+  const body = { checkoutKey: randomUUID(), name: "Fixture", phone: "9000000000", deliveryMode: "Pickup", paymentMethod: "pickup_qr", items: [{ productId: 1, quantity: 1 }] };
+  await assert.rejects(createCustomerOrder(customer, { ...body, deliveryMode: "Delivery" }), /requires store pickup/);
+  item.price = 0;
+  await assert.rejects(createCustomerOrder(customer, body), /positive order total/);
+  item.price = 299;
+  const order = await createCustomerOrder(customer, body);
+  assert.equal(order.paymentStatus, "Awaiting payment");
+  assert.equal(order.orderStatus, "Pending");
+  assert.equal(order.totalAmount, 299);
+  assert.equal(order.shippingCharge, 0);
+  order.orderStatus = "Processing";
+  order.update = async (values) => Object.assign(order, values);
+  t.mock.method(Order, "findByPk", async () => order);
+  await assert.rejects(updateOrder(order.id, { orderStatus: "Ready for pickup" }), /Verify the UPI payment/);
+  await updateOrder(order.id, { paymentStatus: "Paid" });
+  assert.equal(order.paymentStatus, "Paid");
+  await updateOrder(order.id, { orderStatus: "Ready for pickup" });
+  assert.equal(order.orderStatus, "Ready for pickup");
+});

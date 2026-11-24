@@ -26,5 +26,5 @@ export function useCustomer() {
 export function useCustomerOrders(customerId?: string) {
   return useQuery({ queryKey: ["customer-orders", customerId], queryFn: () => customerRequest<{ data: CustomerOrder[] }>("/api/customer/orders"), enabled: Boolean(customerId), refetchInterval: 15_000, refetchOnWindowFocus: true });
 }
-export const paymentLabel = (method: string) => method === "upi" ? "UPI / Online" : method === "store" ? "Pay at store" : "Cash on Delivery";
+export const paymentLabel = (method: string) => method === "upi" ? "UPI / Online" : method === "pickup_qr" ? "Store pickup QR" : method === "store" ? "Pay at store" : "Cash on Delivery";
 export function readableAddress(value: string) { try { return Object.values(JSON.parse(value)).join(", "); } catch { return value; } }
